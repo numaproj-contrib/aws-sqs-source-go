@@ -2,56 +2,42 @@ package sqs
 
 import (
 	"context"
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/service/sqs"
+	"github.com/aws/aws-sdk-go/service/sqs/sqsiface"
+	sourcesdk "github.com/numaproj/numaflow-go/pkg/sourcer"
 	"log"
+	"strconv"
 	"sync"
 	"time"
-
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/credentials"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/sqs"
-	"github.com/numaproj-contrib/aws-sqs-source-go/pkg/config"
-	sourcesdk "github.com/numaproj/numaflow-go/pkg/sourcer"
 )
 
 // AWSSqsSource represents an AWS SQS source with necessary attributes.
+/**
+We are keeping readIdx and toAckSet just for our internal check
+*/
 type AWSSqsSource struct {
-	session          *session.Session
 	lock             *sync.Mutex
 	queueURL         *string
-	sqsServiceClient *sqs.SQS // This is missing in the original code. Ensure it is initialized.
-}
-
-// initSQS initializes an AWS session for SQS using the given region, access key, and secret.
-func initSess(region string, accessKey string, awsSecret string) *session.Session {
-	awsconfig := aws.Config{
-		Region:      aws.String(region),
-		Credentials: credentials.NewStaticCredentials(accessKey, awsSecret, ""),
-	}
-	return session.Must(session.NewSession(&awsconfig))
+	toAckSet         map[string]struct{}
+	sqsServiceClient sqsiface.SQSAPI
 }
 
 // NewAWSSqsSource creates a new AWSSqsSource using the given AWS configuration.
-func NewAWSSqsSource(config config.AwsConfig) *AWSSqsSource {
-	sess := initSess(config.AwsRegion, config.AwsAccessKey, config.AwsSecret) // Fixed incorrect parameter.
-	svc := sqs.New(sess)
-	url, err := svc.GetQueueUrl(&sqs.GetQueueUrlInput{QueueName: aws.String("numaflow")})
+func NewAWSSqsSource(sqsServiceClient sqsiface.SQSAPI, queueName string) *AWSSqsSource {
+	url, err := sqsServiceClient.GetQueueUrl(&sqs.GetQueueUrlInput{QueueName: aws.String(queueName)})
 	if err != nil {
 		return nil
 	}
-	if sess != nil {
-		return &AWSSqsSource{
-			session:          sess,
-			lock:             new(sync.Mutex),
-			queueURL:         url.QueueUrl,
-			sqsServiceClient: svc,
-		}
+	return &AWSSqsSource{
+		lock:             new(sync.Mutex),
+		queueURL:         url.QueueUrl,
+		sqsServiceClient: sqsServiceClient,
+		toAckSet:         make(map[string]struct{}),
 	}
-	return nil
 }
 
 // Pending returns the number of pending records for the source.
-// Currently, it always returns zero.
 func (s *AWSSqsSource) Pending(_ context.Context) int64 {
 	q := &sqs.GetQueueAttributesInput{
 		QueueUrl: s.queueURL,
@@ -63,57 +49,81 @@ func (s *AWSSqsSource) Pending(_ context.Context) int64 {
 	if err != nil {
 		return 0
 	}
-	log.Println(attributes)
-	return 0
-}
-
-// GetQueueURL retrieves the URL for the given SQS queue.
-func GetQueueURL(sess *session.Session, queue *string) (*sqs.GetQueueUrlOutput, error) {
-	svc := sqs.New(sess)
-	return svc.GetQueueUrl(&sqs.GetQueueUrlInput{
-
-		QueueName: queue,
-	})
+	// This returns the count of messages that are yet to be deleted
+	// they might have been read by the consumer but if they are not deleted they will be present in the queue
+	atoi, err := strconv.Atoi(*attributes.Attributes["ApproximateNumberOfMessages"])
+	if err != nil {
+		return 0
+	}
+	return int64(atoi)
 }
 
 // Read fetches messages from the SQS queue and sends them to the provided message channel.
 func (s *AWSSqsSource) Read(_ context.Context, readRequest sourcesdk.ReadRequest, messageCh chan<- sourcesdk.Message) {
 	ctx, cancel := context.WithTimeout(context.Background(), readRequest.TimeOut())
 	defer cancel()
-
-	//timeOut := int64(5)
-
-	// Receive messages from the SQS queue.
-	msgResult, err := s.sqsServiceClient.ReceiveMessage(&sqs.ReceiveMessageInput{
-
-		QueueUrl:        s.queueURL,
-		WaitTimeSeconds: aws.Int64(20),
-	})
-	if err != nil {
-		log.Fatal(err)
+	// If we have un-acked data, we return without reading any new data.
+	if len(s.toAckSet) > 0 {
 		return
 	}
-	log.Println(msgResult)
 
-	// Process the messages.
-	for _, msg := range msgResult.Messages {
+	// Receive messages from the SQS queue.
+
+	/*msgResult is the result returned from the ReceiveMessage API call.
+	It's of type *sqs.ReceiveMessageOutput, which contains several fields,
+	including the Messages slice that holds the messages retrieved from the SQS queue
+
+	*/
+
+	msgResult, err := s.sqsServiceClient.ReceiveMessage(&sqs.ReceiveMessageInput{
+		QueueUrl:            s.queueURL,
+		WaitTimeSeconds:     aws.Int64(20),
+		MaxNumberOfMessages: aws.Int64(int64(readRequest.Count())),
+	})
+	if err != nil {
+		log.Fatalln("Error receiving message:", err)
+
+	}
+	for i := 0; uint64(i) < readRequest.Count(); i++ {
+
+		msg := msgResult.Messages
 		select {
 		case <-ctx.Done():
 			return
 		default:
 			s.lock.Lock()
 			messageCh <- sourcesdk.NewMessage(
-				[]byte(msg.String()),
-				sourcesdk.NewOffset([]byte(msg.String()), "0"),
+				[]byte(*msg[i].Body), // the body of the message sent in the queue
+				// The ReceiptHandle is a unique identifier for the received message and is required to delete it from the queue
+				// As sqs doesn't have partitions
+				sourcesdk.NewOffset([]byte(*msg[i].ReceiptHandle), "0"),
 				time.Now(),
 			)
+			// Keeping  track of messages read
+			s.toAckSet[*msg[i].ReceiptHandle] = struct{}{}
 			s.lock.Unlock()
 		}
 	}
+
 }
 
 // Ack acknowledges a message.
-// Currently, it's a stub and does nothing.
 func (s *AWSSqsSource) Ack(_ context.Context, request sourcesdk.AckRequest) {
+
+	// We will delete the message from queue once they are read
+	for _, offset := range request.Offsets() {
+		// Process the messages...
+
+		// Delete the message from the queue to prevent it from being read again.
+		_, err := s.sqsServiceClient.DeleteMessage(&sqs.DeleteMessageInput{
+			QueueUrl:      s.queueURL,
+			ReceiptHandle: aws.String(string(offset.Value())), // Offset value contains the Recipient Handle Value
+		})
+		if err != nil {
+			log.Fatalln("Failed to delete message:", err)
+		}
+		// Once the message is deleted remove it from the internal memory cache too
+		delete(s.toAckSet, string(offset.Value()))
+	}
 
 }
