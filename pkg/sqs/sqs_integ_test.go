@@ -112,7 +112,7 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 
 }
-func TestAWSSqsSource_Read2(t *testing.T) {
+func TestAWSSqsSource_Read2Integ(t *testing.T) {
 	awsSqsSource := NewAWSSqsSource(sqsClient, "numaflow")
 	messageCh := make(chan sourcer.Message, 20)
 	doneCh := make(chan struct{})

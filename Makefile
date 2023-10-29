@@ -7,7 +7,7 @@ ifeq ($(IMAGE_TAG),)
     IMAGE_TAG=latest
 endif
 
-.PHONY: build image lint clean
+.PHONY: build image lint clean test integ-test
 
 build:
 	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -v -o ./dist/redis-e2e-test-sink main.go
@@ -21,3 +21,12 @@ lint:
 
 clean:
 	-rm -rf ./dist
+
+test:
+	@echo "Running all tests..."
+	@go test ./...
+
+integ-test:
+	@echo "Running integration tests..."
+	@go test ./pkg/sqs -run Integ
+
