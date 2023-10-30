@@ -1,0 +1,33 @@
+apiVersion: numaflow.numaproj.io/v1alpha1
+kind: Pipeline
+metadata:
+  name: aws-sqs-source
+spec:
+  vertices:
+    - name: in
+      scale:
+        min: 1
+      source:
+        udsource:
+          container:
+            image: "quay.io/numaio/numaflow-go/aws-sqs-source-go:latest"
+            env:
+              - name: QUEUE_NAME
+                value: "numaflow"
+              - name: REGION
+                value: "us-east-1"
+              - name: AWS_ACCESS_KEY
+                value: "AKIAS2LNCO4EY3JOZMTY"
+              - name: AWS_SECRET
+                value: "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"
+              - name: AWS_END_POINT
+                value: ""
+    - name: redis-sink
+      sink:
+        udsink:
+          container:
+            image: "quay.io/numaio/numaflow-sink/redis-e2e-test-sink:v0.5.0"
+  edges:
+    - from: in
+      to: redis-sink
+

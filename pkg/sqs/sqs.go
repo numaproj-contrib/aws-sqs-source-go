@@ -2,6 +2,8 @@ package sqs
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/sqs"
 	"github.com/aws/aws-sdk-go/service/sqs/sqsiface"
@@ -14,7 +16,7 @@ import (
 
 // AWSSqsSource represents an AWS SQS source with necessary attributes.
 /**
-We are keeping readIdx and toAckSet just for our internal check
+We are keeping  toAckSet just for our internal check
 */
 type AWSSqsSource struct {
 	lock             *sync.Mutex
@@ -24,17 +26,17 @@ type AWSSqsSource struct {
 }
 
 // NewAWSSqsSource creates a new AWSSqsSource using the given AWS configuration.
-func NewAWSSqsSource(sqsServiceClient sqsiface.SQSAPI, queueName string) *AWSSqsSource {
+func NewAWSSqsSource(sqsServiceClient sqsiface.SQSAPI, queueName string) (*AWSSqsSource, error) {
 	url, err := sqsServiceClient.GetQueueUrl(&sqs.GetQueueUrlInput{QueueName: aws.String(queueName)})
 	if err != nil {
-		return nil
+		return nil, errors.New(fmt.Sprintf("Error in Getting Queue URL %s", err))
 	}
 	return &AWSSqsSource{
 		lock:             new(sync.Mutex),
 		queueURL:         url.QueueUrl,
 		sqsServiceClient: sqsServiceClient,
 		toAckSet:         make(map[string]struct{}),
-	}
+	}, nil
 }
 
 // Pending returns the number of pending records for the source.

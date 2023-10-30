@@ -113,7 +113,8 @@ func TestMain(m *testing.M) {
 
 }
 func TestAWSSqsSource_Read2Integ(t *testing.T) {
-	awsSqsSource := NewAWSSqsSource(sqsClient, "numaflow")
+	awsSqsSource, err := NewAWSSqsSource(sqsClient, "numaflow")
+	assert.Nil(t, err)
 	messageCh := make(chan sourcer.Message, 20)
 	doneCh := make(chan struct{})
 

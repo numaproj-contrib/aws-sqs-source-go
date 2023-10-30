@@ -26,8 +26,12 @@ func initSess() *session.Session {
 
 func main() {
 	sqsClient := awsSqs.New(initSess())
-	awsSqsSource := sqs.NewAWSSqsSource(sqsClient, os.Getenv("QUEUE_NAME"))
-	err := sourcer.NewServer(awsSqsSource).Start(context.Background())
+	awsSqsSource, err := sqs.NewAWSSqsSource(sqsClient, os.Getenv("QUEUE_NAME"))
+	if err != nil {
+		log.Panic("Failed to Create SQS Source : ", err)
+	}
+
+	err = sourcer.NewServer(awsSqsSource).Start(context.Background())
 	if err != nil {
 		log.Panic("Failed to start source server : ", err)
 	}

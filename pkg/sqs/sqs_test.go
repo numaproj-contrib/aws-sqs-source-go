@@ -43,7 +43,8 @@ func TestAWSSqsSource_Read(t *testing.T) {
 		QueueUrl: aws.String("testQueueURL"),
 	}
 	mockSqsSource.On("GetQueueUrl", mock.Anything).Return(&sqsQueueUrlOutput, nil)
-	awsSqsSource := NewAWSSqsSource(mockSqsSource, "testQueue")
+	awsSqsSource, err := NewAWSSqsSource(mockSqsSource, "testQueue")
+	assert.Nil(t, err)
 	assert.NotNil(t, awsSqsSource)
 
 	// Mocking the Receive Method

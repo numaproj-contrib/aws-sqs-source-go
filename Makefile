@@ -1,16 +1,16 @@
 DOCKERIO_ORG=quay.io/numaio
 PLATFORM=linux/amd64
-TARGET=redis
+TARGET=aws-sqs-source-go
 
 IMAGE_TAG=$(TAG)
 ifeq ($(IMAGE_TAG),)
     IMAGE_TAG=latest
 endif
 
-.PHONY: build image lint clean test integ-test
+.PHONY: build image lint clean test integ-test imagepush
 
-build:
-	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -v -o ./dist/redis-e2e-test-sink main.go
+build:clean
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -v -o ./dist/aws-sqs-source-go main.go
 
 image: build
 	docker buildx build --no-cache -t "$(DOCKERIO_ORG)/numaflow-go/aws-sqs-source-go:$(IMAGE_TAG)" --platform $(PLATFORM) --target $(TARGET) . --load
@@ -29,4 +29,9 @@ test:
 integ-test:
 	@echo "Running integration tests..."
 	@go test ./pkg/sqs -run Integ
+
+imagepush:build
+	docker buildx build --no-cache -t "$(DOCKERIO_ORG)/numaflow-go/aws-sqs-source-go:$(IMAGE_TAG)" --platform $(PLATFORM) --target $(TARGET) . --push
+
+
 
