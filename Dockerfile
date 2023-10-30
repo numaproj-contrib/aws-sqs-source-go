@@ -2,15 +2,18 @@
 # base
 ####################################################################################################
 FROM alpine:3.12.3 as base
+ARG ARCH=amd64
+
 RUN apk update && apk upgrade && \
     apk add ca-certificates && \
     apk --no-cache add tzdata
 
-COPY dist/aws-sqs-source-go /bin/aws-sqs-source-go
+# Conditionally copy the right binary based on the architecture
+COPY dist/aws-sqs-source-go-${ARCH} /bin/aws-sqs-source-go
 RUN chmod +x /bin/aws-sqs-source-go
 
 ####################################################################################################
-# simple-source
+# aws-sqs-source-go
 ####################################################################################################
 FROM scratch as aws-sqs-source-go
 ARG ARCH
