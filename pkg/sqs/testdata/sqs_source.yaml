@@ -3,6 +3,8 @@ kind: Pipeline
 metadata:
   name: aws-sqs-source
 spec:
+  limits:
+    readBatchSize: 10 # for aws sqs the batch size should be between 1 -  10
   vertices:
     - name: in
       scale:
