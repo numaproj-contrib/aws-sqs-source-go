@@ -28,7 +28,7 @@ var (
 var resource *dockertest.Resource
 var pool *dockertest.Pool
 var sqsClient *sqs.SQS
-var numOfMessages = 4 //We have to vary tha
+var queueURl string
 
 func initSess() *session.Session {
 	sess := session.Must(session.NewSessionWithOptions(session.Options{
@@ -42,20 +42,8 @@ func initSess() *session.Session {
 	return sess
 }
 
-func setupQueue(client *sqs.SQS, queueName string) error {
-	params := &sqs.CreateQueueInput{
-		QueueName: aws.String(queueName),
-	}
-
-	response, err := client.CreateQueue(params)
-	if err != nil {
-		fmt.Println("Error creating queue:", err)
-		return err
-	}
-
-	queueURL := *response.QueueUrl
-	// Send 10 messages to the queue
-	for i := 1; i <= numOfMessages; i++ {
+func sendMessages(client *sqs.SQS, queueURL string, numMessages int) error {
+	for i := 1; i <= numMessages; i++ {
 		sendParams := &sqs.SendMessageInput{
 			QueueUrl:    &queueURL,
 			MessageBody: aws.String(fmt.Sprintf("Test Message %d", i)),
@@ -63,9 +51,23 @@ func setupQueue(client *sqs.SQS, queueName string) error {
 		_, err := client.SendMessage(sendParams)
 		if err != nil {
 			fmt.Printf("Failed to send message %d: %s\n", i, err)
+			return err
 		}
 	}
 	return nil
+}
+
+func setupQueue(client *sqs.SQS, queueName string) (*string, error) {
+	params := &sqs.CreateQueueInput{
+		QueueName: aws.String(queueName),
+	}
+
+	response, err := client.CreateQueue(params)
+	if err != nil {
+		fmt.Println("Error creating queue:", err)
+		return nil, err
+	}
+	return response.QueueUrl, nil
 }
 
 func TestMain(m *testing.M) {
@@ -97,10 +99,11 @@ func TestMain(m *testing.M) {
 		var err error
 		awsSession := initSess()
 		sqsClient = sqs.New(awsSession)
-		err = setupQueue(sqsClient, "numaflow")
+		queue, err := setupQueue(sqsClient, "numaflow")
 		if err != nil {
-			return err
+			log.Fatalf("could not Get Queue URL  %s", err)
 		}
+		queueURl = *queue
 		return nil
 	}); err != nil {
 		_ = pool.Purge(resource)
@@ -114,6 +117,9 @@ func TestMain(m *testing.M) {
 
 }
 func TestAWSSqsSource_Read2Integ(t *testing.T) {
+
+	err := sendMessages(sqsClient, queueURl, 2)
+	assert.Nil(t, err)
 	awsSqsSource, err := NewAWSSqsSource(sqsClient, "numaflow")
 	assert.Nil(t, err)
 	messageCh := make(chan sourcer.Message, 20)
@@ -152,6 +158,9 @@ func TestAWSSqsSource_Read2Integ(t *testing.T) {
 	})
 	doneCh3 := make(chan struct{})
 
+	// Send 6 more messages
+	err = sendMessages(sqsClient, queueURl, 6)
+	assert.Nil(t, err)
 	go func() {
 		awsSqsSource.Read(context.TODO(), mocks.ReadRequest{
 			CountValue: 6,
