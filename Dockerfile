@@ -8,7 +8,6 @@ RUN apk update && apk upgrade && \
     apk add ca-certificates && \
     apk --no-cache add tzdata
 
-# Conditionally copy the right binary based on the architecture
 COPY dist/aws-sqs-source-go-${ARCH} /bin/aws-sqs-source-go
 RUN chmod +x /bin/aws-sqs-source-go
 

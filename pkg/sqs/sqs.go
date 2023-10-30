@@ -55,8 +55,11 @@ func (s *AWSSqsSource) Pending(_ context.Context) int64 {
 	// they might have been read by the consumer but if they are not deleted they will be present in the queue
 	atoi, err := strconv.Atoi(*attributes.Attributes["ApproximateNumberOfMessages"])
 	if err != nil {
+		log.Printf("Error in Getting the Pending Items %s", err)
+
 		return 0
 	}
+	log.Println("Returning Pending Items ----", atoi)
 	return int64(atoi)
 }
 
@@ -76,17 +79,23 @@ func (s *AWSSqsSource) Read(_ context.Context, readRequest sourcesdk.ReadRequest
 	including the Messages slice that holds the messages retrieved from the SQS queue
 
 	*/
+	var readRequestCount int64 = 10
+	if readRequest.Count() <= 10 {
+		readRequestCount = int64(readRequest.Count())
+	}
 
 	msgResult, err := s.sqsServiceClient.ReceiveMessage(&sqs.ReceiveMessageInput{
 		QueueUrl:            s.queueURL,
 		WaitTimeSeconds:     aws.Int64(20),
-		MaxNumberOfMessages: aws.Int64(int64(readRequest.Count())),
+		MaxNumberOfMessages: aws.Int64(readRequestCount),
 	})
 	if err != nil {
 		log.Fatalln("Error receiving message:", err)
 
 	}
-	for i := 0; uint64(i) < readRequest.Count(); i++ {
+	log.Println("Message Received From Queue ---", msgResult)
+	// We have to iterate over the lnegt
+	for i := 0; i < len(msgResult.Messages); i++ {
 
 		msg := msgResult.Messages
 		select {
@@ -101,6 +110,8 @@ func (s *AWSSqsSource) Read(_ context.Context, readRequest sourcesdk.ReadRequest
 				sourcesdk.NewOffset([]byte(*msg[i].ReceiptHandle), "0"),
 				time.Now(),
 			)
+			log.Println("Message Sent To Message Channel ---", *msg[i].Body)
+
 			// Keeping  track of messages read
 			s.toAckSet[*msg[i].ReceiptHandle] = struct{}{}
 			s.lock.Unlock()
@@ -111,7 +122,7 @@ func (s *AWSSqsSource) Read(_ context.Context, readRequest sourcesdk.ReadRequest
 
 // Ack acknowledges a message.
 func (s *AWSSqsSource) Ack(_ context.Context, request sourcesdk.AckRequest) {
-
+	log.Printf("Acknowledging the received Message ,Current Offset Value ---%s", request.Offsets())
 	// We will delete the message from queue once they are read
 	for _, offset := range request.Offsets() {
 		// Process the messages...
@@ -126,6 +137,8 @@ func (s *AWSSqsSource) Ack(_ context.Context, request sourcesdk.AckRequest) {
 		}
 		// Once the message is deleted remove it from the internal memory cache too
 		delete(s.toAckSet, string(offset.Value()))
+		log.Println("SuccessFully Acknowledged The Sent Message ---")
+
 	}
 
 }

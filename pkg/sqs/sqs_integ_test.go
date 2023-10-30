@@ -28,6 +28,7 @@ var (
 var resource *dockertest.Resource
 var pool *dockertest.Pool
 var sqsClient *sqs.SQS
+var numOfMessages = 4 //We have to vary tha
 
 func initSess() *session.Session {
 	sess := session.Must(session.NewSessionWithOptions(session.Options{
@@ -54,7 +55,7 @@ func setupQueue(client *sqs.SQS, queueName string) error {
 
 	queueURL := *response.QueueUrl
 	// Send 10 messages to the queue
-	for i := 1; i <= 10; i++ {
+	for i := 1; i <= numOfMessages; i++ {
 		sendParams := &sqs.SendMessageInput{
 			QueueUrl:    &queueURL,
 			MessageBody: aws.String(fmt.Sprintf("Test Message %d", i)),
