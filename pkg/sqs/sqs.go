@@ -75,6 +75,7 @@ func (s *AWSSqsSource) Read(_ context.Context, readRequest sourcesdk.ReadRequest
 	defer cancel()
 	// If we have un-acked data, we return without reading any new data.
 	if s.GetApproximateMessageCount(ApproximateNumberOfMessagesNotVisible) > 0 {
+		log.Println("Approx messages", s.GetApproximateMessageCount(ApproximateNumberOfMessagesNotVisible))
 		return
 	}
 	/*
@@ -93,7 +94,6 @@ func (s *AWSSqsSource) Read(_ context.Context, readRequest sourcesdk.ReadRequest
 	if err != nil {
 		log.Fatalln("Error receiving message:", err)
 	}
-	log.Println("Message Received From Queue ---", msgResult)
 	msgs := msgResult.Messages
 	for i := 0; i < len(msgs); i++ {
 		select {
@@ -108,10 +108,9 @@ func (s *AWSSqsSource) Read(_ context.Context, readRequest sourcesdk.ReadRequest
 				sourcesdk.NewOffset([]byte(*msgs[i].ReceiptHandle), "0"),
 				time.Now(),
 			)
-
+			s.lock.Unlock()
 		}
 	}
-
 }
 
 // Ack acknowledges a message.

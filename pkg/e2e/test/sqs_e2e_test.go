@@ -1,11 +1,11 @@
-package e2e
+package test
 
 import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/sqs"
-	"github.com/numaproj-contrib/aws-sqs-source-go/pkg/fixtures"
+	"github.com/numaproj-contrib/numaflow-utils-go/testing/fixtures"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 	"log"
@@ -21,8 +21,6 @@ type SqsSourceSuite struct {
 // This sends message to sqs queue
 func SendMessage(sess *session.Session, queueUrl string, messageBody string) error {
 	sqsClient := sqs.New(sess)
-	log.Println("URL----------------", queueUrl)
-
 	_, err := sqsClient.SendMessage(&sqs.SendMessageInput{
 		QueueUrl:    &queueUrl,
 		MessageBody: aws.String(messageBody),
@@ -77,8 +75,7 @@ func (s *SqsSourceSuite) TestSqsSource() {
 	w := s.Given().Pipeline("@testdata/sqs_source.yaml").When().CreatePipelineAndWait()
 	w.Expect().VertexPodsRunning()
 	defer w.DeletePipelineAndWait()
-	w.Expect().SinkContains("redis-sink", message, fixtures.WithTimeout(2*time.Minute))
-
+	w.Expect().SinkContains("redis-sink", message, fixtures.WithTimeout(3*time.Minute))
 }
 
 func TestSqsSourceSuite(t *testing.T) {

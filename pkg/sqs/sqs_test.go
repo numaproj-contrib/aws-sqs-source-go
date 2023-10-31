@@ -1,65 +1,136 @@
+//go:build test
+
 package sqs
 
 import (
 	"context"
+	"fmt"
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/credentials"
+	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/sqs"
 	"github.com/numaproj-contrib/aws-sqs-source-go/pkg/mocks"
 	"github.com/numaproj/numaflow-go/pkg/sourcer"
+	"github.com/ory/dockertest/v3"
+	"github.com/ory/dockertest/v3/docker"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
-	"strconv"
+	"log"
+	"os"
 	"testing"
 	"time"
 )
 
-func SqsMessageObject() *sqs.ReceiveMessageOutput {
-	messages := make([]*sqs.Message, 10)
-	for i := 0; i < 10; i++ {
-		msg := &sqs.Message{
-			Attributes: map[string]*string{
-				"ApproximateReceiveCount":          aws.String("1"),
-				"ApproximateFirstReceiveTimestamp": aws.String("1635545983"),
-			},
-			Body:          aws.String("Message Body " + strconv.Itoa(i)),
-			MD5OfBody:     aws.String("SomeMD5Value"),
-			MessageId:     aws.String("MsgID" + strconv.Itoa(i)),
-			ReceiptHandle: aws.String("Receipt" + strconv.Itoa(i)),
-		}
-		messages[i] = msg
-	}
+const (
+	endPoint  = "http://127.0.0.1:5000"
+	region    = "us-east-1"
+	accessKey = "access-key"
+	secretKey = "secret"
+	queue     = "numaflow-tests-sqs-queue"
+)
 
-	output := &sqs.ReceiveMessageOutput{
-		Messages: messages,
-	}
-	return output
+var resource *dockertest.Resource
+var pool *dockertest.Pool
+var sqsClient *sqs.SQS
+var queueURl string
 
+func initSess() *session.Session {
+	sess := session.Must(session.NewSessionWithOptions(session.Options{
+		Config: aws.Config{
+			Region:      aws.String(region),
+			Credentials: credentials.NewStaticCredentials(accessKey, secretKey, ""),
+			Endpoint:    aws.String(endPoint),
+		},
+		SharedConfigState: session.SharedConfigDisable,
+	}))
+	return sess
 }
 
-func TestAWSSqsSource_Read(t *testing.T) {
-
-	mockSqsSource := new(mocks.MockSQS)
-	sqsQueueUrlOutput := sqs.GetQueueUrlOutput{
-		QueueUrl: aws.String("testQueueURL"),
+func sendMessages(client *sqs.SQS, queueURL string, numMessages int) error {
+	for i := 1; i <= numMessages; i++ {
+		sendParams := &sqs.SendMessageInput{
+			QueueUrl:    &queueURL,
+			MessageBody: aws.String(fmt.Sprintf("Test Message %d", i)),
+		}
+		_, err := client.SendMessage(sendParams)
+		if err != nil {
+			fmt.Printf("Failed to send message %d: %s\n", i, err)
+			return err
+		}
 	}
-	sqsQueuAttibutesOutput := sqs.GetQueueAttributesOutput{
-		Attributes: map[string]*string{
-			"ApproximateNumberOfMessages":           aws.String("0"),
-			"ApproximateNumberOfMessagesNotVisible": aws.String("0"),
+	return nil
+}
+
+func setupQueue(client *sqs.SQS, queueName string) (*string, error) {
+	params := &sqs.CreateQueueInput{
+		QueueName: aws.String(queueName),
+	}
+
+	response, err := client.CreateQueue(params)
+	if err != nil {
+		fmt.Println("Error creating queue:", err)
+		return nil, err
+	}
+	return response.QueueUrl, nil
+}
+
+// TestMain sets up the necessary infrastructure for testing by initializing a Docker pool,
+// launching a moto server container for emulating AWS SQS, and configuring the SQS client.
+// It also ensures proper cleanup of resources after tests are executed.
+func TestMain(m *testing.M) {
+
+	// connect to docker
+	p, err := dockertest.NewPool("")
+	if err != nil {
+		log.Fatalf("could not connect to docker ;is it running ? %s", err)
+	}
+	pool = p
+	opts := dockertest.RunOptions{
+		Repository:   "motoserver/moto",
+		Tag:          "latest",
+		Env:          []string{"MOTO_PORT=5000"},
+		ExposedPorts: []string{"5000"},
+		PortBindings: map[docker.Port][]docker.PortBinding{
+			"5000": {
+				{HostIP: "127.0.0.1", HostPort: "5000"},
+			},
 		},
 	}
-	mockSqsSource.On("GetQueueAttributes", mock.Anything).Return(&sqsQueuAttibutesOutput, nil)
+	resource, err = pool.RunWithOptions(&opts)
+	if err != nil {
+		_ = pool.Purge(resource)
+		log.Fatalf("could not start resource %s", err)
+	}
 
-	mockSqsSource.On("GetQueueUrl", mock.Anything).Return(&sqsQueueUrlOutput, nil)
-	awsSqsSource, err := NewAWSSqsSource(mockSqsSource, "testQueue")
+	if err := pool.Retry(func() error {
+		var err error
+		awsSession := initSess()
+		sqsClient = sqs.New(awsSession)
+		queue, err := setupQueue(sqsClient, queue)
+		if err != nil {
+			log.Fatalf("could not Get Queue URL  %s", err)
+		}
+		queueURl = *queue
+		return nil
+	}); err != nil {
+		_ = pool.Purge(resource)
+		log.Fatalf("could not connect to moto sqs %s", err)
+	}
+	code := m.Run()
+	if err := pool.Purge(resource); err != nil {
+		log.Fatalf("Couln't purge resource %s", err)
+	}
+	os.Exit(code)
+
+}
+func TestAWSSqsSource_Read2Integ(t *testing.T) {
+
+	err := sendMessages(sqsClient, queueURl, 2)
 	assert.Nil(t, err)
-	assert.NotNil(t, awsSqsSource)
-
-	// Mocking the Receive Method
-	sqsMessageObj := SqsMessageObject()
-	mockSqsSource.On("ReceiveMessage", mock.Anything).Return(sqsMessageObj, nil)
+	awsSqsSource, err := NewAWSSqsSource(sqsClient, queue)
+	assert.Nil(t, err)
 	messageCh := make(chan sourcer.Message, 20)
 	doneCh := make(chan struct{})
+
 	go func() {
 		awsSqsSource.Read(context.TODO(), mocks.ReadRequest{
 			CountValue: 2,
@@ -68,13 +139,12 @@ func TestAWSSqsSource_Read(t *testing.T) {
 		close(doneCh)
 	}()
 	<-doneCh
-	doneCh2 := make(chan struct{})
-
 	assert.Equal(t, 2, len(messageCh))
 
 	// Try reading 4 more messages
 	// Since the previous batch didn't get acked, the data source shouldn't allow us to read more messages
 	// We should get 0 messages, meaning the channel only holds the previous 2 messages
+	doneCh2 := make(chan struct{})
 	go func() {
 		awsSqsSource.Read(context.TODO(), mocks.ReadRequest{
 			CountValue: 4,
@@ -89,14 +159,14 @@ func TestAWSSqsSource_Read(t *testing.T) {
 	msg1 := <-messageCh
 	msg2 := <-messageCh
 
-	mockSqsSource.On("DeleteMessage", mock.Anything).Return(&sqs.DeleteMessageOutput{}, nil)
-
 	awsSqsSource.Ack(context.TODO(), mocks.TestAckRequest{
 		OffsetsValue: []sourcer.Offset{msg1.Offset(), msg2.Offset()},
 	})
-
 	doneCh3 := make(chan struct{})
 
+	// Send 6 more messages
+	err = sendMessages(sqsClient, queueURl, 6)
+	assert.Nil(t, err)
 	go func() {
 		awsSqsSource.Read(context.TODO(), mocks.ReadRequest{
 			CountValue: 6,
@@ -107,4 +177,28 @@ func TestAWSSqsSource_Read(t *testing.T) {
 	<-doneCh3
 	assert.Equal(t, 6, len(messageCh))
 
+}
+
+func TestAWSSqsSource_Pending(t *testing.T) {
+	err := sendMessages(sqsClient, queueURl, 2)
+	assert.Nil(t, err)
+	awsSqsSource, err := NewAWSSqsSource(sqsClient, queue)
+	assert.Nil(t, err)
+	// Pending Items are 2  As 2 messages are sent to Queue
+	pendingItems := awsSqsSource.Pending(context.TODO())
+	assert.Equal(t, int64(2), pendingItems)
+	messageCh := make(chan sourcer.Message, 20)
+	doneCh := make(chan struct{})
+
+	go func() {
+		awsSqsSource.Read(context.TODO(), mocks.ReadRequest{
+			CountValue: 2,
+			Timeout:    time.Second,
+		}, messageCh)
+		close(doneCh)
+	}()
+	<-doneCh
+	// Post Reading Pending Items should be 0
+	pendingItems = awsSqsSource.Pending(context.TODO())
+	assert.Equal(t, int64(0), pendingItems)
 }
