@@ -21,7 +21,8 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
-	"github.com/numaproj/numaflow/test/fixtures"
+	"github.com/numaproj-contrib/aws-sqs-source-go/pkg/fixtures"
+
 	"io"
 	"log"
 	"net/http"
