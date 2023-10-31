@@ -14,16 +14,16 @@ spec:
           container:
             image: "quay.io/numaio/numaflow-go/aws-sqs-source-go:latest"
             env:
-              - name: QUEUE_NAME
-                value: "numaflow"
-              - name: REGION
-                value: "us-east-1"
+              - name: AWS_QUEUE
+                value: "your_queue_name"
+              - name: AWS_REGION
+                value: "your_region"
               - name: AWS_ACCESS_KEY
-                value: "AKIAS2LNCO4EY3JOZMTY"
+                value: "your_access_key"
               - name: AWS_SECRET
-                value: "jEhARJ4ltSq7MvjgDw8kgNKZnk4228jCDDLzmEv0"
+                value: "your_secret"
               - name: AWS_END_POINT
-                value: ""
+                value: "http://127.0.0.1:5000"
     - name: redis-sink
       sink:
         udsink:

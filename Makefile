@@ -17,6 +17,12 @@ ifeq ($(IMAGE_TAG),)
     IMAGE_TAG=latest
 endif
 
+DOCKER:=$(shell command -v docker 2> /dev/null)
+ifndef DOCKER
+DOCKER:=$(shell command -v podman 2> /dev/null)
+endif
+
+
 .PHONY: build image lint clean test integ-test imagepush
 
 build: clean
@@ -30,16 +36,11 @@ lint:
 	go mod tidy
 	golangci-lint run --fix --verbose --concurrency 4 --timeout 5m
 
-clean:
-	-rm -rf ./dist
+
 
 test:
-	@echo "Running all tests..."
-	@go test ./...
-
-integ-test:
 	@echo "Running integration tests..."
-	@go test ./pkg/sqs -run Integ
+	@go test ./pkg/sqs/sqs_test.go
 
 imagepush: build
 	docker buildx build --no-cache -t "$(DOCKERIO_ORG)/numaflow-go/aws-sqs-source-go:$(IMAGE_TAG)" --platform $(PLATFORMS) --target $(TARGET) . --push
@@ -66,7 +67,13 @@ test-e2e:
 	kubectl -n numaflow-system delete po -lapp.kubernetes.io/component=controller-manager,app.kubernetes.io/part-of=numaflow
 	kubectl -n numaflow-system delete po e2e-api-pod  --ignore-not-found=true
 	cat pkg/e2e/manifests/e2e-api-pod.yaml |  sed 's@quay.io/numaproj/@$(IMAGE_NAMESPACE)/@' | sed 's/:latest/:$(VERSION)/' | kubectl -n numaflow-system apply -f -
-	go test -v -timeout 15m -count 1 --tags test -p 1 ./test/e2e
+	kubectl apply -f pkg/e2e/manifests/moto.yaml
+	export AWS_ACCESS_KEY="your_access_key"
+	export AWS_REGION="your_region"
+	export AWS_SECRET="your_secret"
+	export AWS_QUEUE="your_queue_name"
+	export AWS_ENDPOINT="http://127.0.0.1:5000"
+	go test -v -timeout 15m -count 1 --tags test -p 1 ./pkg/e2e/sqs_e2e_test.go
 	$(MAKE) cleanup-e2e
 
 .PHONY: e2eapi-image

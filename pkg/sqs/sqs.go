@@ -14,10 +14,15 @@ import (
 	"time"
 )
 
+const (
+	ApproximateNumberOfMessages           = "ApproximateNumberOfMessages"
+	ApproximateNumberOfMessagesNotVisible = "ApproximateNumberOfMessagesNotVisible"
+	MaxNumberOfMessages                   = 10 // MaxNumberOfMessages is messages to return From SQS Valid values: 1 to 10. Default: 1
+	WaitTimeSeconds                       = 20 // WaitTimeSeconds specifies the time (in seconds) the call waits for a message to arrive in the queue before returning. If a message arrives, the call returns early; if not and the time expires, it returns an empty message list.
+
+)
+
 // AWSSqsSource represents an AWS SQS source with necessary attributes.
-/**
-We are keeping  toAckSet just for our internal check
-*/
 type AWSSqsSource struct {
 	lock             *sync.Mutex
 	queueURL         *string
@@ -39,82 +44,71 @@ func NewAWSSqsSource(sqsServiceClient sqsiface.SQSAPI, queueName string) (*AWSSq
 	}, nil
 }
 
-// Pending returns the number of pending records for the source.
-func (s *AWSSqsSource) Pending(_ context.Context) int64 {
+func (s *AWSSqsSource) GetApproximateMessageCount(queryType string) int64 {
 	q := &sqs.GetQueueAttributesInput{
 		QueueUrl: s.queueURL,
 		AttributeNames: []*string{
-			aws.String("ApproximateNumberOfMessages"),
+			aws.String(queryType),
 		},
 	}
 	attributes, err := s.sqsServiceClient.GetQueueAttributes(q)
 	if err != nil {
-		return 0
+		return -1
 	}
-	// This returns the count of messages that are yet to be deleted
-	// they might have been read by the consumer but if they are not deleted they will be present in the queue
-	atoi, err := strconv.Atoi(*attributes.Attributes["ApproximateNumberOfMessages"])
+	atoi, err := strconv.Atoi(*attributes.Attributes[queryType])
 	if err != nil {
 		log.Printf("Error in Getting the Pending Items %s", err)
-
-		return 0
+		return -1
 	}
-	log.Println("Returning Pending Items ----", atoi)
 	return int64(atoi)
+}
+
+// Pending  Returns the approximate number of messages available for retrieval from the queue.
+func (s *AWSSqsSource) Pending(_ context.Context) int64 {
+	return s.GetApproximateMessageCount(ApproximateNumberOfMessages)
 }
 
 // Read fetches messages from the SQS queue and sends them to the provided message channel.
 func (s *AWSSqsSource) Read(_ context.Context, readRequest sourcesdk.ReadRequest, messageCh chan<- sourcesdk.Message) {
+	var readRequestCount int64
 	ctx, cancel := context.WithTimeout(context.Background(), readRequest.TimeOut())
 	defer cancel()
 	// If we have un-acked data, we return without reading any new data.
-	if len(s.toAckSet) > 0 {
+	if s.GetApproximateMessageCount(ApproximateNumberOfMessagesNotVisible) > 0 {
 		return
 	}
-
-	// Receive messages from the SQS queue.
-
-	/*msgResult is the result returned from the ReceiveMessage API call.
-	It's of type *sqs.ReceiveMessageOutput, which contains several fields,
-	including the Messages slice that holds the messages retrieved from the SQS queue
-
+	/*
+		msgResult holds the outcome of the ReceiveMessage API call. This result is of type *sqs.ReceiveMessageOutput
+		and encapsulates various fields, among which is the Messages slice. This slice contains the messages
+		that have been fetched from the SQS queue.
 	*/
-	var readRequestCount int64 = 10
-	if readRequest.Count() <= 10 {
+	if readRequest.Count() <= MaxNumberOfMessages {
 		readRequestCount = int64(readRequest.Count())
 	}
-
 	msgResult, err := s.sqsServiceClient.ReceiveMessage(&sqs.ReceiveMessageInput{
 		QueueUrl:            s.queueURL,
-		WaitTimeSeconds:     aws.Int64(20),
+		WaitTimeSeconds:     aws.Int64(WaitTimeSeconds),
 		MaxNumberOfMessages: aws.Int64(readRequestCount),
 	})
 	if err != nil {
 		log.Fatalln("Error receiving message:", err)
-
 	}
 	log.Println("Message Received From Queue ---", msgResult)
-	// We have to iterate over the lnegt
-	for i := 0; i < len(msgResult.Messages); i++ {
-
-		msg := msgResult.Messages
+	msgs := msgResult.Messages
+	for i := 0; i < len(msgs); i++ {
 		select {
 		case <-ctx.Done():
 			return
 		default:
 			s.lock.Lock()
 			messageCh <- sourcesdk.NewMessage(
-				[]byte(*msg[i].Body), // the body of the message sent in the queue
+				[]byte(*msgs[i].Body),
 				// The ReceiptHandle is a unique identifier for the received message and is required to delete it from the queue
-				// As sqs doesn't have partitions
-				sourcesdk.NewOffset([]byte(*msg[i].ReceiptHandle), "0"),
+				// partitionId 0 As sqs doesn't have partitions
+				sourcesdk.NewOffset([]byte(*msgs[i].ReceiptHandle), "0"),
 				time.Now(),
 			)
-			log.Println("Message Sent To Message Channel ---", *msg[i].Body)
 
-			// Keeping  track of messages read
-			s.toAckSet[*msg[i].ReceiptHandle] = struct{}{}
-			s.lock.Unlock()
 		}
 	}
 
@@ -122,11 +116,8 @@ func (s *AWSSqsSource) Read(_ context.Context, readRequest sourcesdk.ReadRequest
 
 // Ack acknowledges a message.
 func (s *AWSSqsSource) Ack(_ context.Context, request sourcesdk.AckRequest) {
-	log.Printf("Acknowledging the received Message ,Current Offset Value ---%s", request.Offsets())
 	// We will delete the message from queue once they are read
 	for _, offset := range request.Offsets() {
-		// Process the messages...
-
 		// Delete the message from the queue to prevent it from being read again.
 		_, err := s.sqsServiceClient.DeleteMessage(&sqs.DeleteMessageInput{
 			QueueUrl:      s.queueURL,
@@ -135,10 +126,5 @@ func (s *AWSSqsSource) Ack(_ context.Context, request sourcesdk.AckRequest) {
 		if err != nil {
 			log.Fatalln("Failed to delete message:", err)
 		}
-		// Once the message is deleted remove it from the internal memory cache too
-		delete(s.toAckSet, string(offset.Value()))
-		log.Println("SuccessFully Acknowledged The Sent Message ---")
-
 	}
-
 }

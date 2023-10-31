@@ -15,7 +15,7 @@ import (
 func initSess() *session.Session {
 	sess := session.Must(session.NewSessionWithOptions(session.Options{
 		Config: aws.Config{
-			Region:      aws.String(os.Getenv("REGION")),
+			Region:      aws.String(os.Getenv("AWS_REGION")),
 			Credentials: credentials.NewStaticCredentials(os.Getenv("AWS_ACCESS_KEY"), os.Getenv("AWS_SECRET"), ""),
 			Endpoint:    aws.String(os.Getenv("AWS_END_POINT")),
 		},
@@ -26,14 +26,12 @@ func initSess() *session.Session {
 
 func main() {
 	sqsClient := awsSqs.New(initSess())
-	awsSqsSource, err := sqs.NewAWSSqsSource(sqsClient, os.Getenv("QUEUE_NAME"))
+	awsSqsSource, err := sqs.NewAWSSqsSource(sqsClient, os.Getenv("AWS_QUEUE"))
 	if err != nil {
 		log.Panic("Failed to Create SQS Source : ", err)
 	}
-
 	err = sourcer.NewServer(awsSqsSource).Start(context.Background())
 	if err != nil {
 		log.Panic("Failed to start source server : ", err)
 	}
-
 }

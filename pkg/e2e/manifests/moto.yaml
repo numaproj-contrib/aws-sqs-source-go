@@ -1,0 +1,52 @@
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: moto
+  name: moto
+spec:
+  ports:
+    - port: 5000
+      protocol: TCP
+      targetPort: 5000
+  selector:
+    app: moto
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  labels:
+    app: moto
+  name: moto
+spec:
+  selector:
+    matchLabels:
+      app: moto
+  serviceName: moto
+  template:
+    metadata:
+      labels:
+        app: moto
+    spec:
+      containers:
+        - name: moto
+          command: [ "/usr/local/bin/moto_server", "-H", "0.0.0.0"]
+          image: motoserver/moto:2.2.4
+          livenessProbe:
+            failureThreshold: 5
+            httpGet:
+              path: /
+              port: 5000
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 10
+          ports:
+            - containerPort: 5000
+          readinessProbe:
+            failureThreshold: 5
+            httpGet:
+              path: /
+              port: 5000
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 10

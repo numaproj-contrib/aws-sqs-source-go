@@ -42,6 +42,14 @@ func TestAWSSqsSource_Read(t *testing.T) {
 	sqsQueueUrlOutput := sqs.GetQueueUrlOutput{
 		QueueUrl: aws.String("testQueueURL"),
 	}
+	sqsQueuAttibutesOutput := sqs.GetQueueAttributesOutput{
+		Attributes: map[string]*string{
+			"ApproximateNumberOfMessages":           aws.String("0"),
+			"ApproximateNumberOfMessagesNotVisible": aws.String("0"),
+		},
+	}
+	mockSqsSource.On("GetQueueAttributes", mock.Anything).Return(&sqsQueuAttibutesOutput, nil)
+
 	mockSqsSource.On("GetQueueUrl", mock.Anything).Return(&sqsQueueUrlOutput, nil)
 	awsSqsSource, err := NewAWSSqsSource(mockSqsSource, "testQueue")
 	assert.Nil(t, err)

@@ -8,6 +8,7 @@ import (
 	"github.com/numaproj-contrib/aws-sqs-source-go/pkg/fixtures"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
+	"log"
 	"os"
 	"testing"
 	"time"
@@ -20,21 +21,23 @@ type SqsSourceSuite struct {
 // This sends message to sqs queue
 func SendMessage(sess *session.Session, queueUrl string, messageBody string) error {
 	sqsClient := sqs.New(sess)
+	log.Println("URL----------------", queueUrl)
 
 	_, err := sqsClient.SendMessage(&sqs.SendMessageInput{
 		QueueUrl:    &queueUrl,
 		MessageBody: aws.String(messageBody),
 	})
+	log.Println(err)
 
 	return err
 }
 
-func CreateAWSSession(accessKey, region, secret string) *session.Session {
+func CreateAWSSession(accessKey, region, secret, endPoint string) *session.Session {
 	sess := session.Must(session.NewSessionWithOptions(session.Options{
 		Config: aws.Config{
 			Region:      aws.String(region),
-			Credentials: credentials.NewStaticCredentials(os.Getenv(accessKey), os.Getenv(secret), ""),
-			Endpoint:    aws.String(os.Getenv("AWS_END_POINT")),
+			Credentials: credentials.NewStaticCredentials(accessKey, secret, ""),
+			Endpoint:    aws.String(endPoint),
 		},
 		SharedConfigState: session.SharedConfigDisable,
 	}))
@@ -57,8 +60,15 @@ func GetQueueURL(sess *session.Session, queue string) (*sqs.GetQueueUrlOutput, e
 
 func (s *SqsSourceSuite) TestSqsSource() {
 	var message = "aws_Sqs"
-	sess := CreateAWSSession("AKIAS2LNCO4EY3JOZMTY", "us-east-1", "jEhARJ4ltSq7MvjgDw8kgNKZnk4228jCDDLzmEv0")
-	url, err := GetQueueURL(sess, "numaflow")
+
+	// Get values from environment variables
+	accessKey := os.Getenv("AWS_ACCESS_KEY")
+	region := os.Getenv("AWS_REGION")
+	secret := os.Getenv("AWS_SECRET")
+	queue := os.Getenv("AWS_QUEUE")
+	endPoint := os.Getenv("AWS_ENDPOINT")
+	sess := CreateAWSSession(accessKey, region, secret, endPoint)
+	url, err := GetQueueURL(sess, queue)
 	assert.Nil(s.T(), err)
 
 	err = SendMessage(sess, *url.QueueUrl, message)

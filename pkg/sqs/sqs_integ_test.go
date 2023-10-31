@@ -18,11 +18,12 @@ import (
 	"time"
 )
 
-var (
+const (
 	endPoint  = "http://127.0.0.1:5000"
 	region    = "us-east-1"
 	accessKey = "access-key"
 	secretKey = "secret"
+	queue     = "numaflow-tests-sqs-queue"
 )
 
 var resource *dockertest.Resource
@@ -70,6 +71,9 @@ func setupQueue(client *sqs.SQS, queueName string) (*string, error) {
 	return response.QueueUrl, nil
 }
 
+// TestMain sets up the necessary infrastructure for testing by initializing a Docker pool,
+// launching a moto server container for emulating AWS SQS, and configuring the SQS client.
+// It also ensures proper cleanup of resources after tests are executed.
 func TestMain(m *testing.M) {
 
 	// connect to docker
@@ -99,7 +103,7 @@ func TestMain(m *testing.M) {
 		var err error
 		awsSession := initSess()
 		sqsClient = sqs.New(awsSession)
-		queue, err := setupQueue(sqsClient, "numaflow")
+		queue, err := setupQueue(sqsClient, queue)
 		if err != nil {
 			log.Fatalf("could not Get Queue URL  %s", err)
 		}
@@ -120,7 +124,7 @@ func TestAWSSqsSource_Read2Integ(t *testing.T) {
 
 	err := sendMessages(sqsClient, queueURl, 2)
 	assert.Nil(t, err)
-	awsSqsSource, err := NewAWSSqsSource(sqsClient, "numaflow")
+	awsSqsSource, err := NewAWSSqsSource(sqsClient, queue)
 	assert.Nil(t, err)
 	messageCh := make(chan sourcer.Message, 20)
 	doneCh := make(chan struct{})

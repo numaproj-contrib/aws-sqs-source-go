@@ -31,3 +31,9 @@ func (m *MockSQS) DeleteMessage(in *sqs.DeleteMessageInput) (*sqs.DeleteMessageO
 	args := m.Called(in)
 	return args.Get(0).(*sqs.DeleteMessageOutput), args.Error(1)
 }
+
+func (m *MockSQS) GetQueueAttributes(in *sqs.GetQueueAttributesInput) (*sqs.GetQueueAttributesOutput, error) {
+	args := m.Called(in)
+	return args.Get(0).(*sqs.GetQueueAttributesOutput), args.Error(1)
+
+}
