@@ -33,3 +33,22 @@ integ-test:
 
 imagepush: build
 	docker buildx build --no-cache -t "$(DOCKERIO_ORG)/numaflow-go/aws-sqs-source-go:$(IMAGE_TAG)" --platform $(PLATFORMS) --target $(TARGET) . --push
+
+test-e2e:
+	   $(MAKE) cleanup-e2e
+	   kubectl -n numaflow-system delete po -lapp.kubernetes.io/component=controller-manager,app.kubernetes.io/part-of=numaflow
+	   kubectl -n numaflow-system delete po e2e-api-pod  --ignore-not-found=true
+	   cat pkg/e2e/manifests/e2e-api-pod.yaml |  sed 's@quay.io/numaproj/@$(IMAGE_NAMESPACE)/@' | sed 's/:latest/:$(VERSION)/' | kubectl -n numaflow-system apply -f -
+	   go generate $(shell find ./test/sqs-e2e* -name '*.go')
+	   go test -v -timeout 15m -count 1 --tags test -p 1 ./pkg/e2e*
+
+
+.PHONY: cleanup-e2e
+cleanup-e2e:
+	kubectl -n numaflow-system delete svc -lnumaflow-e2e=true --ignore-not-found=true
+	kubectl -n numaflow-system delete sts -lnumaflow-e2e=true --ignore-not-found=true
+	kubectl -n numaflow-system delete deploy -lnumaflow-e2e=true --ignore-not-found=true
+	kubectl -n numaflow-system delete cm -lnumaflow-e2e=true --ignore-not-found=true
+	kubectl -n numaflow-system delete secret -lnumaflow-e2e=true --ignore-not-found=true
+	kubectl -n numaflow-system delete po -lnumaflow-e2e=true --ignore-not-found=true
+
