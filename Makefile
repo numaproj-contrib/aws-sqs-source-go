@@ -23,6 +23,14 @@ ifndef DOCKER
 DOCKER:=$(shell command -v podman 2> /dev/null)
 endif
 
+CURRENT_CONTEXT:=$(shell [[ "`command -v kubectl`" != '' ]] && kubectl config current-context 2> /dev/null || echo "unset")
+IMAGE_IMPORT_CMD:=$(shell [[ "`command -v k3d`" != '' ]] && [[ "$(CURRENT_CONTEXT)" =~ k3d-* ]] && echo "k3d image import -c `echo $(CURRENT_CONTEXT) | cut -c 5-`")
+ifndef IMAGE_IMPORT_CMD
+IMAGE_IMPORT_CMD:=$(shell [[ "`command -v minikube`" != '' ]] && [[ "$(CURRENT_CONTEXT)" =~ minikube* ]] && echo "minikube image load")
+endif
+ifndef IMAGE_IMPORT_CMD
+IMAGE_IMPORT_CMD:=$(shell [[ "`command -v kind`" != '' ]] && [[ "$(CURRENT_CONTEXT)" =~ kind-* ]] && echo "kind load docker-image")
+endif
 
 .PHONY: build image lint clean test  imagepush install-numaflow
 
@@ -67,20 +75,23 @@ test-e2e:
 	$(MAKE) e2eapi-image
 	kubectl -n numaflow-system delete po -lapp.kubernetes.io/component=controller-manager,app.kubernetes.io/part-of=numaflow
 	kubectl -n numaflow-system delete po e2e-api-pod  --ignore-not-found=true
-	cat pkg/e2e/manifests/e2e-api-pod.yaml |  sed 's@quay.io/numaproj/@$(IMAGE_NAMESPACE)/@' | sed 's/:latest/:$(VERSION)/' | kubectl -n numaflow-system apply -f -
-	kubectl apply -f pkg/e2e/manifests/moto.yaml
+	cat pkg/e2e/manifests/e2e-api-pod.yaml |  sed 's@quay.io/numaio/numaflow-go/@$(IMAGE_NAMESPACE)/@' | sed 's/:latest/:$(VERSION)/' | kubectl -n numaflow-system apply -f -
 	export AWS_ACCESS_KEY="your_access_key"
 	export AWS_REGION="your_region"
 	export AWS_SECRET="your_secret"
 	export AWS_QUEUE="your_queue_name"
 	export AWS_ENDPOINT="http://127.0.0.1:5000"
-	go test -v -timeout 15m -count 1 --tags test -p 1 ./pkg/e2e/test/sqs_e2e_test.go
+	go generate $(shell find ./pkg/e2e/test$* -name '*.go')
+	go test -v -timeout 15m -count 1 --tags test -p 1 ./pkg/e2e/test/$*
 	$(MAKE) cleanup-e2e
 
 .PHONY: e2eapi-image
 e2eapi-image: clean dist/e2eapi
 				 DOCKER_BUILDKIT=1 $(DOCKER) build . --build-arg "ARCH=amd64" --target e2eapi --tag $(IMAGE_NAMESPACE)/e2eapi:$(VERSION) --build-arg VERSION="$(VERSION)"
 				 @if [[ "$(DOCKER_PUSH)" = "true" ]]; then $(DOCKER) push $(IMAGE_NAMESPACE)/e2eapi:$(VERSION); fi
+ ifdef IMAGE_IMPORT_CMD
+ 	$(IMAGE_IMPORT_CMD) $(IMAGE_NAMESPACE)/$(BINARY_NAME):$(VERSION)
+ endif
 
 clean:
 	-rm -rf ${CURRENT_DIR}/dist
