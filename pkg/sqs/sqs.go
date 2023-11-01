@@ -75,7 +75,6 @@ func (s *AWSSqsSource) Read(_ context.Context, readRequest sourcesdk.ReadRequest
 	defer cancel()
 	// If we have un-acked data, we return without reading any new data.
 	if s.GetApproximateMessageCount(ApproximateNumberOfMessagesNotVisible) > 0 {
-		log.Println("Approx messages", s.GetApproximateMessageCount(ApproximateNumberOfMessagesNotVisible))
 		return
 	}
 	/*

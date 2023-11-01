@@ -19,9 +19,9 @@ spec:
               - name: AWS_REGION
                 value: "us-east-1"
               - name: AWS_ACCESS_KEY
-                value: "AKIAS2LNCO4EYNSUGG6C"
+                value: "key"
               - name: AWS_SECRET
-                value: "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"
+                value: "secret"
               - name: AWS_END_POINT
                 value: ""
     - name: redis-sink
