@@ -1,6 +1,7 @@
 package test
 
 import (
+	"fmt"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -59,6 +60,19 @@ func GetQueueURL(sess *session.Session, queue string) (*sqs.GetQueueUrlOutput, e
 func (s *SqsSourceSuite) TestSqsSource() {
 	var message = "aws_Sqs"
 
+	// Create Moto resources used for mocking aws APIs.
+	deleteCMD := fmt.Sprintf("kubectl delete -k ../../config/apps/moto -n %s --ignore-not-found=true", fixtures.Namespace)
+	s.Given().When().Exec("sh", []string{"-c", deleteCMD}, fixtures.OutputRegexp(""))
+	createCMD := fmt.Sprintf("kubectl apply -k ../../config/apps/moto -n %s", fixtures.Namespace)
+	s.Given().When().Exec("sh", []string{"-c", createCMD}, fixtures.OutputRegexp("service/moto created"))
+	labelSelector := fmt.Sprintf("app=%s", "moto")
+	s.Given().When().WaitForStatefulSetReady(labelSelector)
+	s.T().Log("Moto resources are ready")
+
+	s.T().Log("port forwarding moto service")
+	stopPortForward := s.StartPortForward("moto-0", 5000)
+	defer stopPortForward()
+
 	// Get values from environment variables
 	accessKey := os.Getenv("AWS_ACCESS_KEY")
 	region := os.Getenv("AWS_REGION")
@@ -71,7 +85,6 @@ func (s *SqsSourceSuite) TestSqsSource() {
 
 	err = SendMessage(sess, *url.QueueUrl, message)
 	assert.Nil(s.T(), err)
-
 	w := s.Given().Pipeline("@testdata/sqs_source.yaml").When().CreatePipelineAndWait()
 	w.Expect().VertexPodsRunning()
 	defer w.DeletePipelineAndWait()

@@ -7,5 +7,5 @@ metadata:
 spec:
   containers:
     - name: main
-      image: quay.io/numaproj/e2eapi:latest
+      image: quay.io/numaio/numaflow-go/e2eapi:latest
       imagePullPolicy: IfNotPresent
