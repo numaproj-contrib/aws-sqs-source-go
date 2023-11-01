@@ -72,7 +72,7 @@ func (s *SqsSourceSuite) TestSqsSource() {
 	err = SendMessage(sess, *url.QueueUrl, message)
 	assert.Nil(s.T(), err)
 
-	w := s.Given().Pipeline("@testdata/sqs_source.yaml").When().CreatePipelineAndWait()
+	w := s.Given().Pipeline("@testdata/sqs_source.yaml").When().CreatePipelineAndWait().Wait(3 * time.Minute)
 	w.Expect().VertexPodsRunning()
 	defer w.DeletePipelineAndWait()
 	w.Expect().SinkContains("redis-sink", message, fixtures.WithTimeout(3*time.Minute))

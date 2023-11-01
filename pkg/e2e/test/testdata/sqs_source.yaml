@@ -15,15 +15,15 @@ spec:
             image: "quay.io/numaio/numaflow-go/aws-sqs-source-go:latest"
             env:
               - name: AWS_QUEUE
-                value: "your_queue_name"
+                value: "numaflow"
               - name: AWS_REGION
-                value: "your_region"
+                value: "us-east-1"
               - name: AWS_ACCESS_KEY
-                value: "your_access_key"
+                value: "AKIAS2LNCO4EYNSUGG6C"
               - name: AWS_SECRET
-                value: "your_secret"
+                value: "KNRocBmFNKJFfwKRHwmOzBfA/728wgP4zI3f4vaA"
               - name: AWS_END_POINT
-                value: "http://127.0.0.1:5000"
+                value: ""
     - name: redis-sink
       sink:
         udsink:
