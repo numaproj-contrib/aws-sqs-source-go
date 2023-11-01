@@ -40,7 +40,6 @@ func NewAWSSqsSource(sqsServiceClient sqsiface.SQSAPI, queueName string) (*AWSSq
 		lock:             new(sync.Mutex),
 		queueURL:         url.QueueUrl,
 		sqsServiceClient: sqsServiceClient,
-		toAckSet:         make(map[string]struct{}),
 	}, nil
 }
 
