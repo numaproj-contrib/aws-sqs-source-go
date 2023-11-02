@@ -76,10 +76,11 @@ func (s *SqsSourceSuite) TestSqsSource() {
 	labelSelector := fmt.Sprintf("app=%s", "moto")
 	s.Given().When().WaitForStatefulSetReady(labelSelector)
 	s.T().Log("Moto resources are ready")
-	time.Sleep(5 * time.Second) // waiting for resources to be ready completely
+	time.Sleep(10 * time.Second) // waiting for resources to be ready completely
 
 	s.T().Log("port forwarding moto service")
 	stopPortForward := s.StartPortForward("moto-0", 5000)
+	time.Sleep(10 * time.Second) //waiting for port forward to be ready
 	defer stopPortForward()
 	sess := CreateAWSSession(AWS_ACCESS_KEY, AWS_REGION, AWS_SECRET, AWS_ENDPOINT)
 	// Create queue client
@@ -99,6 +100,8 @@ func (s *SqsSourceSuite) TestSqsSource() {
 			case <-stopChan:
 				log.Println("Exit sending Message To Queue.....")
 				return
+			default:
+				continue
 			}
 		}
 	}()
