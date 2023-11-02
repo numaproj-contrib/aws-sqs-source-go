@@ -1,3 +1,5 @@
+//go:build test
+
 package test
 
 import (
@@ -95,12 +97,11 @@ func (s *SqsSourceSuite) TestSqsSource() {
 			}
 			select {
 			case <-stopChan:
-				log.Println("Exit sending .....")
+				log.Println("Exit sending Message To Queue.....")
 				return
 			}
 		}
 	}()
-
 	assert.Nil(s.T(), err)
 	defer w.DeletePipelineAndWait()
 	w.Expect().SinkContains("redis-sink", message, fixtures.WithTimeout(2*time.Minute))
