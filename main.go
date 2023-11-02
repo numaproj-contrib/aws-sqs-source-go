@@ -2,14 +2,16 @@ package main
 
 import (
 	"context"
+	"log"
+	"os"
+
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
 	awsSqs "github.com/aws/aws-sdk-go/service/sqs"
-	"github.com/numaproj-contrib/aws-sqs-source-go/pkg/sqs"
 	"github.com/numaproj/numaflow-go/pkg/sourcer"
-	"log"
-	"os"
+
+	"github.com/numaproj-contrib/aws-sqs-source-go/pkg/sqs"
 )
 
 func initSess() *session.Session {

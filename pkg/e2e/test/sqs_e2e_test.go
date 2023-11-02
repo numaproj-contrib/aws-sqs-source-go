@@ -4,6 +4,10 @@ package test
 
 import (
 	"fmt"
+	"log"
+	"testing"
+	"time"
+
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -11,9 +15,6 @@ import (
 	"github.com/numaproj-contrib/numaflow-utils-go/testing/fixtures"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
-	"log"
-	"testing"
-	"time"
 )
 
 type SqsSourceSuite struct {

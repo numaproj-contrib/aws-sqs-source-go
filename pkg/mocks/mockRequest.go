@@ -1,8 +1,9 @@
 package mocks
 
 import (
-	"github.com/numaproj/numaflow-go/pkg/sourcer"
 	"time"
+
+	"github.com/numaproj/numaflow-go/pkg/sourcer"
 )
 
 type ReadRequest struct {
