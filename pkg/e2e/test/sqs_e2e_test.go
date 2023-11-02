@@ -97,6 +97,8 @@ func (s *SqsSourceSuite) TestSqsSource() {
 			case <-stopChan:
 				log.Println("Exit sending .....")
 				return
+			default:
+				continue
 			}
 		}
 	}()
