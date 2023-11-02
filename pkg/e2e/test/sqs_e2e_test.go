@@ -9,6 +9,7 @@ import (
 	"github.com/numaproj-contrib/numaflow-utils-go/testing/fixtures"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
+	"log"
 	"testing"
 	"time"
 )
@@ -18,12 +19,11 @@ type SqsSourceSuite struct {
 }
 
 const (
-	AWS_ACCESS_KEY = "key"
+	AWS_ACCESS_KEY = "access-key"
 	AWS_REGION     = "us-east-1"
-	AWS_SECRET     = "secret"
+	AWS_SECRET     = "access-secret"
 	AWS_QUEUE      = "numaflow-test"
 	AWS_ENDPOINT   = "http://127.0.0.1:5000"
-	BATCH_SIZE     = 10
 )
 
 func setupQueue(client *sqs.SQS, queueName string) (*string, error) {
@@ -41,14 +41,12 @@ func setupQueue(client *sqs.SQS, queueName string) (*string, error) {
 
 // This sends message to sqs queue
 func SendMessage(sqsClient *sqs.SQS, queueUrl string, messageBody string) error {
-	for i := 0; i < BATCH_SIZE; i++ {
-		_, err := sqsClient.SendMessage(&sqs.SendMessageInput{
-			QueueUrl:    &queueUrl,
-			MessageBody: aws.String(messageBody),
-		})
-		if err != nil {
-			return err
-		}
+	_, err := sqsClient.SendMessage(&sqs.SendMessageInput{
+		QueueUrl:    &queueUrl,
+		MessageBody: aws.String(messageBody),
+	})
+	if err != nil {
+		return err
 	}
 	return nil
 }
@@ -76,24 +74,37 @@ func (s *SqsSourceSuite) TestSqsSource() {
 	labelSelector := fmt.Sprintf("app=%s", "moto")
 	s.Given().When().WaitForStatefulSetReady(labelSelector)
 	s.T().Log("Moto resources are ready")
+	time.Sleep(5 * time.Second) // waiting for resources to be ready completely
 
 	s.T().Log("port forwarding moto service")
-	time.Sleep(10 * time.Second)
 	stopPortForward := s.StartPortForward("moto-0", 5000)
 	defer stopPortForward()
-
 	sess := CreateAWSSession(AWS_ACCESS_KEY, AWS_REGION, AWS_SECRET, AWS_ENDPOINT)
 	// Create queue client
 	sqsClient := sqs.New(sess)
 	url, err := setupQueue(sqsClient, AWS_QUEUE)
 	assert.Nil(s.T(), err)
-
+	stopChan := make(chan struct{})
 	w := s.Given().Pipeline("@testdata/sqs_source.yaml").When().CreatePipelineAndWait()
 	w.Expect().VertexPodsRunning()
-	err = SendMessage(sqsClient, *url, message)
+	go func() {
+		for {
+			err = SendMessage(sqsClient, *url, message)
+			if err != nil {
+				log.Fatalf("Error in Sending Message %s", err)
+			}
+			select {
+			case <-stopChan:
+				log.Println("Exit sending .....")
+				return
+			}
+		}
+	}()
+
 	assert.Nil(s.T(), err)
 	defer w.DeletePipelineAndWait()
-	w.Expect().SinkContains("redis-sink", message, fixtures.WithTimeout(1*time.Minute))
+	w.Expect().SinkContains("redis-sink", message, fixtures.WithTimeout(2*time.Minute))
+	stopChan <- struct{}{}
 }
 
 func TestSqsSourceSuite(t *testing.T) {

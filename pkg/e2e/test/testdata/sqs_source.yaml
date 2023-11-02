@@ -15,15 +15,15 @@ spec:
             image: "quay.io/numaio/numaflow-go/aws-sqs-source-go:latest"
             env:
               - name: AWS_QUEUE
-                value: "numaflow"
+                value: "numaflow-test"
               - name: AWS_REGION
                 value: "us-east-1"
               - name: AWS_ACCESS_KEY
-                value: "key"
+                value: "access-key"
               - name: AWS_SECRET
-                value: "secret"
+                value: "access-secret"
               - name: AWS_END_POINT
-                value: ""
+                value: "http://moto.numaflow-system.svc.cluster.local:5000"
     - name: redis-sink
       sink:
         udsink:
