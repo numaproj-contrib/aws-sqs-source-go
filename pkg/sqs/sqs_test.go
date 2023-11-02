@@ -1,5 +1,3 @@
-//go:build test
-
 package sqs
 
 import (
@@ -31,7 +29,6 @@ const (
 var resource *dockertest.Resource
 var pool *dockertest.Pool
 var sqsClient *sqs.SQS
-var queueURl string
 
 func initSess() *session.Session {
 	sess := session.Must(session.NewSessionWithOptions(session.Options{
@@ -45,10 +42,10 @@ func initSess() *session.Session {
 	return sess
 }
 
-func sendMessages(client *sqs.SQS, queueURL string, numMessages int) error {
+func sendMessages(client *sqs.SQS, queueURL *string, numMessages int) error {
 	for i := 1; i <= numMessages; i++ {
 		sendParams := &sqs.SendMessageInput{
-			QueueUrl:    &queueURL,
+			QueueUrl:    queueURL,
 			MessageBody: aws.String(fmt.Sprintf("Test Message %d", i)),
 		}
 		_, err := client.SendMessage(sendParams)
@@ -73,11 +70,17 @@ func setupQueue(client *sqs.SQS, queueName string) (*string, error) {
 	return response.QueueUrl, nil
 }
 
+func purgeQueue(client *sqs.SQS, queueURL *string) error {
+	_, err := client.PurgeQueue(&sqs.PurgeQueueInput{
+		QueueUrl: queueURL,
+	})
+	return err
+}
+
 // TestMain sets up the necessary infrastructure for testing by initializing a Docker pool,
 // launching a moto server container for emulating AWS SQS, and configuring the SQS client.
 // It also ensures proper cleanup of resources after tests are executed.
 func TestMain(m *testing.M) {
-
 	// connect to docker
 	p, err := dockertest.NewPool("")
 	if err != nil {
@@ -102,14 +105,8 @@ func TestMain(m *testing.M) {
 	}
 
 	if err := pool.Retry(func() error {
-		var err error
 		awsSession := initSess()
 		sqsClient = sqs.New(awsSession)
-		queue, err := setupQueue(sqsClient, queue)
-		if err != nil {
-			log.Fatalf("could not Get Queue URL  %s", err)
-		}
-		queueURl = *queue
 		return nil
 	}); err != nil {
 		_ = pool.Purge(resource)
@@ -120,11 +117,12 @@ func TestMain(m *testing.M) {
 		log.Fatalf("Couln't purge resource %s", err)
 	}
 	os.Exit(code)
-
 }
-func TestAWSSqsSource_Read2Integ(t *testing.T) {
 
-	err := sendMessages(sqsClient, queueURl, 2)
+func TestAWSSqsSource_Read2Integ(t *testing.T) {
+	queueURL, err := setupQueue(sqsClient, queue)
+
+	err = sendMessages(sqsClient, queueURL, 2)
 	assert.Nil(t, err)
 	awsSqsSource, err := NewAWSSqsSource(sqsClient, queue)
 	assert.Nil(t, err)
@@ -165,7 +163,7 @@ func TestAWSSqsSource_Read2Integ(t *testing.T) {
 	doneCh3 := make(chan struct{})
 
 	// Send 6 more messages
-	err = sendMessages(sqsClient, queueURl, 6)
+	err = sendMessages(sqsClient, queueURL, 6)
 	assert.Nil(t, err)
 	go func() {
 		awsSqsSource.Read(context.TODO(), mocks.ReadRequest{
@@ -177,10 +175,13 @@ func TestAWSSqsSource_Read2Integ(t *testing.T) {
 	<-doneCh3
 	assert.Equal(t, 6, len(messageCh))
 
+	err = purgeQueue(sqsClient, queueURL)
+	assert.Nil(t, err)
 }
 
 func TestAWSSqsSource_Pending(t *testing.T) {
-	err := sendMessages(sqsClient, queueURl, 2)
+	queueURL, err := setupQueue(sqsClient, queue)
+	err = sendMessages(sqsClient, queueURL, 2)
 	assert.Nil(t, err)
 	awsSqsSource, err := NewAWSSqsSource(sqsClient, queue)
 	assert.Nil(t, err)
@@ -201,4 +202,6 @@ func TestAWSSqsSource_Pending(t *testing.T) {
 	// Post Reading Pending Items should be 0
 	pendingItems = awsSqsSource.Pending(context.TODO())
 	assert.Equal(t, int64(0), pendingItems)
+	err = purgeQueue(sqsClient, queueURL)
+	assert.Nil(t, err)
 }

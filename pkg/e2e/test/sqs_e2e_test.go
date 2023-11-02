@@ -41,16 +41,12 @@ func setupQueue(client *sqs.SQS, queueName string) (*string, error) {
 	return response.QueueUrl, nil
 }
 
-// This sends message to sqs queue
 func SendMessage(sqsClient *sqs.SQS, queueUrl string, messageBody string) error {
 	_, err := sqsClient.SendMessage(&sqs.SendMessageInput{
 		QueueUrl:    &queueUrl,
 		MessageBody: aws.String(messageBody),
 	})
-	if err != nil {
-		return err
-	}
-	return nil
+	return err
 }
 
 func CreateAWSSession(accessKey, region, secret, endPoint string) *session.Session {

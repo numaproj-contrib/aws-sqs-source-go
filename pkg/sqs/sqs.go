@@ -26,7 +26,6 @@ const (
 type AWSSqsSource struct {
 	lock             *sync.Mutex
 	queueURL         *string
-	toAckSet         map[string]struct{}
 	sqsServiceClient sqsiface.SQSAPI
 }
 
@@ -43,7 +42,11 @@ func NewAWSSqsSource(sqsServiceClient sqsiface.SQSAPI, queueName string) (*AWSSq
 	}, nil
 }
 
-func (s *AWSSqsSource) GetApproximateMessageCount(queryType string) int64 {
+// GetApproximateMessageCount retrieves the approximate count of messages from an AWS SQS queue based on the given queryType.
+// The queryType can be either "ApproximateNumberOfMessages" or "ApproximateNumberOfMessagesNotVisible".
+// This function fetches the respective attribute from the SQS queue, converts it to an integer, and returns the value.
+// If an error occurs during fetching the attributes or converting the value, it logs the error and returns -1.
+func (s *AWSSqsSource) getApproximateMessageCount(queryType string) int64 {
 	q := &sqs.GetQueueAttributesInput{
 		QueueUrl: s.queueURL,
 		AttributeNames: []*string{
@@ -64,23 +67,20 @@ func (s *AWSSqsSource) GetApproximateMessageCount(queryType string) int64 {
 
 // Pending  Returns the approximate number of messages available for retrieval from the queue.
 func (s *AWSSqsSource) Pending(_ context.Context) int64 {
-	return s.GetApproximateMessageCount(ApproximateNumberOfMessages)
+	return s.getApproximateMessageCount(ApproximateNumberOfMessages)
 }
 
 // Read fetches messages from the SQS queue and sends them to the provided message channel.
 func (s *AWSSqsSource) Read(_ context.Context, readRequest sourcesdk.ReadRequest, messageCh chan<- sourcesdk.Message) {
-	var readRequestCount int64
+	var readRequestCount int64 = 10
+
 	ctx, cancel := context.WithTimeout(context.Background(), readRequest.TimeOut())
 	defer cancel()
-	// If we have un-acked data, we return without reading any new data.
-	if s.GetApproximateMessageCount(ApproximateNumberOfMessagesNotVisible) > 0 {
+	// If we have un-acked data (data  which is received but yet to be deleted from the queue
+	if s.getApproximateMessageCount(ApproximateNumberOfMessagesNotVisible) > 0 {
 		return
 	}
-	/*
-		msgResult holds the outcome of the ReceiveMessage API call. This result is of type *sqs.ReceiveMessageOutput
-		and encapsulates various fields, among which is the Messages slice. This slice contains the messages
-		that have been fetched from the SQS queue.
-	*/
+
 	if readRequest.Count() <= MaxNumberOfMessages {
 		readRequestCount = int64(readRequest.Count())
 	}
@@ -104,7 +104,7 @@ func (s *AWSSqsSource) Read(_ context.Context, readRequest sourcesdk.ReadRequest
 				// The ReceiptHandle is a unique identifier for the received message and is required to delete it from the queue
 				// partitionId 0 As sqs doesn't have partitions
 				sourcesdk.NewOffset([]byte(*msgs[i].ReceiptHandle), "0"),
-				time.Now(),
+				time.Now(), // TODO: Send the time when the message was sent to queue
 			)
 			s.lock.Unlock()
 		}
