@@ -32,8 +32,6 @@ import (
 	"github.com/ory/dockertest/v3"
 	"github.com/ory/dockertest/v3/docker"
 	"github.com/stretchr/testify/assert"
-
-	"github.com/numaproj-contrib/aws-sqs-source-go/pkg/mocks"
 )
 
 const (
@@ -118,8 +116,8 @@ func TestMain(m *testing.M) {
 	}
 	resource, err = pool.RunWithOptions(&opts)
 	if err != nil {
-		_ = pool.Purge(resource)
 		log.Fatalf("could not start resource %s", err)
+		_ = pool.Purge(resource)
 	}
 
 	if err := pool.Retry(func() error {
@@ -148,7 +146,7 @@ func TestAWSSqsSource_Read2Integ(t *testing.T) {
 	doneCh := make(chan struct{})
 
 	go func() {
-		awsSqsSource.Read(context.TODO(), mocks.ReadRequest{
+		awsSqsSource.Read(context.TODO(), ReadRequest{
 			CountValue: 2,
 			Timeout:    time.Second,
 		}, messageCh)
@@ -162,7 +160,7 @@ func TestAWSSqsSource_Read2Integ(t *testing.T) {
 	// We should get 0 messages, meaning the channel only holds the previous 2 messages
 	doneCh2 := make(chan struct{})
 	go func() {
-		awsSqsSource.Read(context.TODO(), mocks.ReadRequest{
+		awsSqsSource.Read(context.TODO(), ReadRequest{
 			CountValue: 4,
 			Timeout:    time.Second,
 		}, messageCh)
@@ -175,7 +173,7 @@ func TestAWSSqsSource_Read2Integ(t *testing.T) {
 	msg1 := <-messageCh
 	msg2 := <-messageCh
 
-	awsSqsSource.Ack(context.TODO(), mocks.TestAckRequest{
+	awsSqsSource.Ack(context.TODO(), TestAckRequest{
 		OffsetsValue: []sourcer.Offset{msg1.Offset(), msg2.Offset()},
 	})
 	doneCh3 := make(chan struct{})
@@ -184,7 +182,7 @@ func TestAWSSqsSource_Read2Integ(t *testing.T) {
 	err = sendMessages(sqsClient, queueURL, 6)
 	assert.Nil(t, err)
 	go func() {
-		awsSqsSource.Read(context.TODO(), mocks.ReadRequest{
+		awsSqsSource.Read(context.TODO(), ReadRequest{
 			CountValue: 6,
 			Timeout:    time.Second,
 		}, messageCh)
@@ -211,7 +209,7 @@ func TestAWSSqsSource_Pending(t *testing.T) {
 	doneCh := make(chan struct{})
 
 	go func() {
-		awsSqsSource.Read(context.TODO(), mocks.ReadRequest{
+		awsSqsSource.Read(context.TODO(), ReadRequest{
 			CountValue: 2,
 			Timeout:    time.Second,
 		}, messageCh)

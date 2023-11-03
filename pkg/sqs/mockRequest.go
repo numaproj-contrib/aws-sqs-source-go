@@ -1,4 +1,4 @@
-package mocks
+package sqs
 
 /*
 Copyright 2022 The Numaproj Authors.

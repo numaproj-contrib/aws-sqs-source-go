@@ -1,5 +1,4 @@
 name: CI
-
 on:
   push:
     branches: [ main ]
@@ -7,7 +6,6 @@ on:
       - '*'
   pull_request:
     branches: [ main ]
-
 jobs:
   aws-sqs-source-go:
     name: aws-sqs-source-go
@@ -16,8 +14,6 @@ jobs:
     env:
       GOPATH: /home/runner/go
     steps:
-
-
       - name: "Step 1: Checkout repository"
         uses: actions/checkout@v3
         with:
@@ -27,7 +23,6 @@ jobs:
         run: |
           echo "IMAGE_TAG=$(git describe --tags --always)" >> $GITHUB_ENV
           curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.55.0
-
 
       - name: "Step 3: Setup Golang"
         uses: actions/setup-go@v4.0.0
@@ -40,13 +35,11 @@ jobs:
           path: ~/.cache/go-build
           key: ${{ runner.os }}-go-build-v1-${{ github.run_id }}
 
-      - name: "Step 5: Run Lint on sink-side-input"
+      - name: "Step 5: Run Lint"
         run: make lint
-        working-directory: ./
 
-      - name: "Step 6: Build and create docker image for sink-side-input"
+      - name: "Step 6: Build and create docker image"
         run: make image
-        working-directory: ./
         env:
           TAG: ${{ env.IMAGE_TAG }}
 
@@ -62,5 +55,3 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v')
         run: |
           docker push "quay.io/numaio/numaflow-go/aws-sqs-source-go:${{env.IMAGE_TAG}}"
-  
-  
