@@ -40,11 +40,11 @@ jobs:
           path: ~/.cache/go-build
           key: ${{ runner.os }}-go-build-v1-${{ github.run_id }}
 
-      - name: "Step 5: Run Lint on sink-side-input"
+      - name: "Step 5: Run Lint on aws-sqs-source go"
         run: make lint
         working-directory: ./
 
-      - name: "Step 6: Build and create docker image for sink-side-input"
+      - name: "Step 6: Build and create docker image for aws-sqs-source go"
         run: make image
         working-directory: ./
         env:
