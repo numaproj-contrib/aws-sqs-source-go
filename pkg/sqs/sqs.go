@@ -1,12 +1,26 @@
 package sqs
 
+/*
+Copyright 2022 The Numaproj Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log"
 	"strconv"
-	"sync"
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -20,12 +34,10 @@ const (
 	ApproximateNumberOfMessagesNotVisible = "ApproximateNumberOfMessagesNotVisible"
 	MaxNumberOfMessages                   = 10 // MaxNumberOfMessages is messages to return From SQS Valid values: 1 to 10. Default: 1
 	WaitTimeSeconds                       = 20 // WaitTimeSeconds specifies the time (in seconds) the call waits for a message to arrive in the queue before returning. If a message arrives, the call returns early; if not and the time expires, it returns an empty message list.
-
 )
 
 // AWSSqsSource represents an AWS SQS source with necessary attributes.
 type AWSSqsSource struct {
-	lock             *sync.Mutex
 	queueURL         *string
 	sqsServiceClient sqsiface.SQSAPI
 }
@@ -34,10 +46,9 @@ type AWSSqsSource struct {
 func NewAWSSqsSource(sqsServiceClient sqsiface.SQSAPI, queueName string) (*AWSSqsSource, error) {
 	url, err := sqsServiceClient.GetQueueUrl(&sqs.GetQueueUrlInput{QueueName: aws.String(queueName)})
 	if err != nil {
-		return nil, errors.New(fmt.Sprintf("Error in Getting Queue URL %s", err))
+		return nil, fmt.Errorf("error in Getting Queue URL %s", err)
 	}
 	return &AWSSqsSource{
-		lock:             new(sync.Mutex),
 		queueURL:         url.QueueUrl,
 		sqsServiceClient: sqsServiceClient,
 	}, nil
@@ -66,7 +77,7 @@ func (s *AWSSqsSource) getApproximateMessageCount(queryType string) int64 {
 	return int64(atoi)
 }
 
-// Pending  Returns the approximate number of messages available for retrieval from the queue.
+// Pending returns the approximate number of messages available for retrieval from the queue.
 func (s *AWSSqsSource) Pending(_ context.Context) int64 {
 	return s.getApproximateMessageCount(ApproximateNumberOfMessages)
 }
@@ -77,7 +88,7 @@ func (s *AWSSqsSource) Read(_ context.Context, readRequest sourcesdk.ReadRequest
 
 	ctx, cancel := context.WithTimeout(context.Background(), readRequest.TimeOut())
 	defer cancel()
-	// If we have un-acked data (data  which is received but yet to be deleted from the queue
+	// If we have un-acked data (data which is received but yet to be deleted from the queue
 	if s.getApproximateMessageCount(ApproximateNumberOfMessagesNotVisible) > 0 {
 		return
 	}
@@ -99,7 +110,6 @@ func (s *AWSSqsSource) Read(_ context.Context, readRequest sourcesdk.ReadRequest
 		case <-ctx.Done():
 			return
 		default:
-			s.lock.Lock()
 			messageCh <- sourcesdk.NewMessage(
 				[]byte(*msgs[i].Body),
 				// The ReceiptHandle is a unique identifier for the received message and is required to delete it from the queue
@@ -107,16 +117,13 @@ func (s *AWSSqsSource) Read(_ context.Context, readRequest sourcesdk.ReadRequest
 				sourcesdk.NewOffset([]byte(*msgs[i].ReceiptHandle), "0"),
 				time.Now(), // TODO: Send the time when the message was sent to queue
 			)
-			s.lock.Unlock()
 		}
 	}
 }
 
-// Ack acknowledges a message.
+// Ack acknowledges the messages that have been read from the SQS queue by deleting them from the queue.
 func (s *AWSSqsSource) Ack(_ context.Context, request sourcesdk.AckRequest) {
-	// We will delete the message from queue once they are read
 	for _, offset := range request.Offsets() {
-		// Delete the message from the queue to prevent it from being read again.
 		_, err := s.sqsServiceClient.DeleteMessage(&sqs.DeleteMessageInput{
 			QueueUrl:      s.queueURL,
 			ReceiptHandle: aws.String(string(offset.Value())), // Offset value contains the Recipient Handle Value

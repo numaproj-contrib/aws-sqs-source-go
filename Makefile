@@ -32,7 +32,7 @@ ifndef IMAGE_IMPORT_CMD
 IMAGE_IMPORT_CMD:=$(shell [[ "`command -v kind`" != '' ]] && [[ "$(CURRENT_CONTEXT)" =~ kind-* ]] && echo "kind load docker-image")
 endif
 
-.PHONY: build image lint clean test  imagepush install-numaflow
+.PHONY: build image lint clean test imagepush install-numaflow
 
 build: clean
 	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -v -o ./dist/aws-sqs-source-go-amd64 main.go
@@ -45,16 +45,12 @@ lint:
 	go mod tidy
 	golangci-lint run --fix --verbose --concurrency 4 --timeout 5m
 
-
-
 test:
 	@echo "Running integration tests..."
 	@go test ./pkg/sqs/*
 
 imagepush: build
 	docker buildx build --no-cache -t "$(DOCKERIO_ORG)/numaflow-go/aws-sqs-source-go:$(IMAGE_TAG)" --platform $(PLATFORMS) --target $(TARGET) . --push
-
-
 
 .PHONY: dist/e2eapi
 dist/e2eapi:
