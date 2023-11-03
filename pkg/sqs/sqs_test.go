@@ -42,6 +42,27 @@ const (
 	queue     = "numaflow-tests-sqs-queue"
 )
 
+type TestReadRequest struct {
+	CountValue uint64
+	Timeout    time.Duration
+}
+
+func (r TestReadRequest) TimeOut() time.Duration {
+	return r.Timeout
+}
+
+func (r TestReadRequest) Count() uint64 {
+	return r.CountValue
+}
+
+type TestAckRequest struct {
+	OffsetsValue []sourcer.Offset
+}
+
+func (ar TestAckRequest) Offsets() []sourcer.Offset {
+	return ar.OffsetsValue
+}
+
 var resource *dockertest.Resource
 var pool *dockertest.Pool
 var sqsClient *sqs.SQS
@@ -146,7 +167,7 @@ func TestAWSSqsSource_Read2Integ(t *testing.T) {
 	doneCh := make(chan struct{})
 
 	go func() {
-		awsSqsSource.Read(context.TODO(), ReadRequest{
+		awsSqsSource.Read(context.TODO(), TestReadRequest{
 			CountValue: 2,
 			Timeout:    time.Second,
 		}, messageCh)
@@ -160,7 +181,7 @@ func TestAWSSqsSource_Read2Integ(t *testing.T) {
 	// We should get 0 messages, meaning the channel only holds the previous 2 messages
 	doneCh2 := make(chan struct{})
 	go func() {
-		awsSqsSource.Read(context.TODO(), ReadRequest{
+		awsSqsSource.Read(context.TODO(), TestReadRequest{
 			CountValue: 4,
 			Timeout:    time.Second,
 		}, messageCh)
@@ -182,7 +203,7 @@ func TestAWSSqsSource_Read2Integ(t *testing.T) {
 	err = sendMessages(sqsClient, queueURL, 6)
 	assert.Nil(t, err)
 	go func() {
-		awsSqsSource.Read(context.TODO(), ReadRequest{
+		awsSqsSource.Read(context.TODO(), TestReadRequest{
 			CountValue: 6,
 			Timeout:    time.Second,
 		}, messageCh)
@@ -209,7 +230,7 @@ func TestAWSSqsSource_Pending(t *testing.T) {
 	doneCh := make(chan struct{})
 
 	go func() {
-		awsSqsSource.Read(context.TODO(), ReadRequest{
+		awsSqsSource.Read(context.TODO(), TestReadRequest{
 			CountValue: 2,
 			Timeout:    time.Second,
 		}, messageCh)
