@@ -2,7 +2,6 @@ package sqs
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log"
 	"strconv"
@@ -34,7 +33,7 @@ type AWSSqsSource struct {
 func NewAWSSqsSource(sqsServiceClient sqsiface.SQSAPI, queueName string) (*AWSSqsSource, error) {
 	url, err := sqsServiceClient.GetQueueUrl(&sqs.GetQueueUrlInput{QueueName: aws.String(queueName)})
 	if err != nil {
-		return nil, errors.New(fmt.Sprintf("Error in Getting Queue URL %s", err))
+		return nil, fmt.Errorf("Error in Getting Queue URL %s", err)
 	}
 	return &AWSSqsSource{
 		lock:             new(sync.Mutex),
