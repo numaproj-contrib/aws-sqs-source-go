@@ -1,0 +1,35 @@
+apiVersion: numaflow.numaproj.io/v1alpha1
+kind: Pipeline
+metadata:
+  name: aws-sqs-source
+spec:
+  limits:
+    readBatchSize: 10 # for aws sqs the batch size should be between 1 -  10 - SQS Valid values: 1 to 10. Default: 1
+  vertices:
+    - name: in
+      scale:
+        min: 1
+      source:
+        udsource:
+          container:
+            image: "quay.io/numaio/numaflow-go/aws-sqs-source-go:latest"
+            env:
+              - name: AWS_QUEUE
+                value: "numaflow-test"
+              - name: AWS_REGION
+                value: "us-east-1"
+              - name: AWS_ACCESS_KEY
+                value: "access-key"
+              - name: AWS_SECRET
+                value: "access-secret"
+              - name: AWS_END_POINT
+                value: "http://moto.numaflow-system.svc.cluster.local:5000"
+    - name: redis-sink
+      sink:
+        udsink:
+          container:
+            image: "quay.io/numaio/numaflow-sink/redis-e2e-test-sink:v0.5.0"
+  edges:
+    - from: in
+      to: redis-sink
+
