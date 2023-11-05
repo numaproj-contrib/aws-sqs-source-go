@@ -19,9 +19,12 @@ limitations under the License.
 import (
 	"context"
 	"fmt"
+	"github.com/ory/dockertest/v3/docker"
 	"log"
 	"net/url"
 	"os"
+	"runtime"
+	"strings"
 	"testing"
 	"time"
 
@@ -31,11 +34,11 @@ import (
 	"github.com/aws/aws-sdk-go/service/sqs"
 	"github.com/numaproj/numaflow-go/pkg/sourcer"
 	"github.com/ory/dockertest/v3"
-	"github.com/ory/dockertest/v3/docker"
 	"github.com/stretchr/testify/assert"
 )
 
 var (
+	endPoint  = "http://localhost:4100"
 	region    = "us-east-1"
 	accessKey = "access-key"
 	secretKey = "secret"
@@ -67,12 +70,12 @@ var resource *dockertest.Resource
 var pool *dockertest.Pool
 var sqsClient *sqs.SQS
 
-func initSess(endPoint string) *session.Session {
+func initSess() *session.Session {
 	sess := session.Must(session.NewSessionWithOptions(session.Options{
 		Config: aws.Config{
 			Region:      aws.String(region),
 			Credentials: credentials.NewStaticCredentials(accessKey, secretKey, ""),
-			Endpoint:    aws.String("http://localhost:4100"),
+			Endpoint:    aws.String(endPoint),
 		},
 		SharedConfigState: session.SharedConfigDisable,
 	}))
@@ -139,36 +142,66 @@ func TestMain(m *testing.M) {
 		log.Fatalf("could not connect to docker ;is it running ? %s", err)
 	}
 	pool = p
-	opts := dockertest.RunOptions{
-		Repository:   "admiralpiett/goaws",
-		Tag:          "latest",
-		ExposedPorts: []string{"4100"},
-		PortBindings: map[docker.Port][]docker.PortBinding{
-			"4100": {
-				{HostIP: "127.0.0.1", HostPort: "4100"},
-			},
-		},
-	}
-	resource, err = pool.RunWithOptions(&opts)
+
+	// Check if goaws container is already running
+	containers, err := pool.Client.ListContainers(docker.ListContainersOptions{})
 	if err != nil {
-		log.Fatalf("could not start resource %s", err)
-		_ = pool.Purge(resource)
+		log.Fatalf("could not list containers %s", err)
 	}
-	// Check if running in DinD environment
-	// This value could be the DinD IP or any other necessary configuration
-	ip := getHostPort(resource, "4100/tcp")
-	endPoint := fmt.Sprintf("http://%s", ip)
+	goawsRunning := false
+	for _, container := range containers {
+		for _, name := range container.Names {
+			if strings.Contains(name, "goaws") {
+				goawsRunning = true
+				break
+			}
+		}
+		if goawsRunning {
+			break
+		}
+	}
+
+	if !goawsRunning {
+		var tag string
+		switch runtime.GOARCH {
+		case "arm64":
+			tag = "latest-arm64"
+		default:
+			tag = "latest"
+		}
+		// Start goaws container if not already running
+		opts := dockertest.RunOptions{
+			Repository:   "admiralpiett/goaws",
+			Tag:          tag,
+			ExposedPorts: []string{"4100"},
+			PortBindings: map[docker.Port][]docker.PortBinding{
+				"4100": {
+					{HostIP: "127.0.0.1", HostPort: "4100"},
+				},
+			},
+		}
+		resource, err = pool.RunWithOptions(&opts)
+		if err != nil {
+			log.Fatalf("could not start resource %s", err)
+			_ = pool.Purge(resource)
+		}
+	}
+
 	if err := pool.Retry(func() error {
-		awsSession := initSess(endPoint)
+		awsSession := initSess()
 		sqsClient = sqs.New(awsSession)
 		return nil
 	}); err != nil {
-		_ = pool.Purge(resource)
+		if resource != nil {
+			_ = pool.Purge(resource)
+		}
 		log.Fatalf("could not connect to moto sqs %s", err)
 	}
 	code := m.Run()
-	if err := pool.Purge(resource); err != nil {
-		log.Fatalf("Couln't purge resource %s", err)
+	if resource != nil {
+		if err := pool.Purge(resource); err != nil {
+			log.Fatalf("Couln't purge resource %s", err)
+		}
 	}
 	os.Exit(code)
 }
