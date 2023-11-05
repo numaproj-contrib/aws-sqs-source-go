@@ -47,7 +47,7 @@ lint:
 
 test:
 	@echo "Running integration tests..."
-	@go test ./pkg/sqs/*
+	@go test -race ./pkg/sqs/*
 
 imagepush: build
 	docker buildx build --no-cache -t "$(DOCKERIO_ORG)/numaflow-go/aws-sqs-source-go:$(IMAGE_TAG)" --platform $(PLATFORMS) --target $(TARGET) . --push

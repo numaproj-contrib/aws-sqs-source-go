@@ -48,6 +48,7 @@ func NewAWSSqsSource(sqsServiceClient sqsiface.SQSAPI, queueName string) (*AWSSq
 	if err != nil {
 		return nil, fmt.Errorf("error in Getting Queue URL %s", err)
 	}
+	log.Println("QueueURL-------", url.QueueUrl)
 	return &AWSSqsSource{
 		queueURL:         url.QueueUrl,
 		sqsServiceClient: sqsServiceClient,

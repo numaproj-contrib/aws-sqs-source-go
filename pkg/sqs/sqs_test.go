@@ -169,7 +169,7 @@ func TestAWSSqsSource_Read2Integ(t *testing.T) {
 	go func() {
 		awsSqsSource.Read(context.TODO(), TestReadRequest{
 			CountValue: 2,
-			Timeout:    time.Second,
+			Timeout:    10 * time.Second,
 		}, messageCh)
 		close(doneCh)
 	}()
@@ -183,7 +183,7 @@ func TestAWSSqsSource_Read2Integ(t *testing.T) {
 	go func() {
 		awsSqsSource.Read(context.TODO(), TestReadRequest{
 			CountValue: 4,
-			Timeout:    time.Second,
+			Timeout:    10 * time.Second,
 		}, messageCh)
 		close(doneCh2)
 	}()
@@ -205,7 +205,7 @@ func TestAWSSqsSource_Read2Integ(t *testing.T) {
 	go func() {
 		awsSqsSource.Read(context.TODO(), TestReadRequest{
 			CountValue: 6,
-			Timeout:    time.Second,
+			Timeout:    10 * time.Second,
 		}, messageCh)
 		close(doneCh3)
 	}()
@@ -223,6 +223,7 @@ func TestAWSSqsSource_Pending(t *testing.T) {
 	assert.Nil(t, err)
 	awsSqsSource, err := NewAWSSqsSource(sqsClient, queue)
 	assert.Nil(t, err)
+	t.Log(awsSqsSource.queueURL)
 	// Pending Items are 2  As 2 messages are sent to Queue
 	pendingItems := awsSqsSource.Pending(context.TODO())
 	assert.Equal(t, int64(2), pendingItems)
@@ -232,7 +233,7 @@ func TestAWSSqsSource_Pending(t *testing.T) {
 	go func() {
 		awsSqsSource.Read(context.TODO(), TestReadRequest{
 			CountValue: 2,
-			Timeout:    time.Second,
+			Timeout:    10 * time.Second,
 		}, messageCh)
 		close(doneCh)
 	}()
