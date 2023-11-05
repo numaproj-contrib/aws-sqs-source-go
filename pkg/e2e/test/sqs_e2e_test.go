@@ -77,7 +77,6 @@ func (s *SqsSourceSuite) TestSqsSource() {
 
 	s.T().Log("port forwarding moto service")
 	stopPortForward := s.StartPortForward("moto-0", 5000)
-	time.Sleep(10 * time.Second) //waiting for port forward to be ready
 	defer stopPortForward()
 	sess := CreateAWSSession(AWS_ACCESS_KEY, AWS_REGION, AWS_SECRET, AWS_ENDPOINT)
 	// Create queue client
