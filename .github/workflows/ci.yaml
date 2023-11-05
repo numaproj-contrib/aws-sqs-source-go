@@ -10,6 +10,11 @@ jobs:
   aws-sqs-source-go:
     name: aws-sqs-source-go
     runs-on: ubuntu-latest
+    services:
+      dind:
+        image: docker:23.0-rc-dind-rootless
+        ports:
+          - 2375:2375
     timeout-minutes: 10
     env:
       GOPATH: /home/runner/go
