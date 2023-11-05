@@ -36,7 +36,7 @@ import (
 )
 
 var (
-	endPoint  = "http://127.0.0.1:5000"
+	endPoint  = "http://127.0.0.1:4100"
 	region    = "us-east-1"
 	accessKey = "access-key"
 	secretKey = "secret"
@@ -141,13 +141,12 @@ func TestMain(m *testing.M) {
 	}
 	pool = p
 	opts := dockertest.RunOptions{
-		Repository:   "motoserver/moto",
+		Repository:   "admiralpiett/goaws",
 		Tag:          "latest",
-		Env:          []string{"MOTO_PORT=5000"},
-		ExposedPorts: []string{"5000"},
+		ExposedPorts: []string{"4100"},
 		PortBindings: map[docker.Port][]docker.PortBinding{
-			"5000": {
-				{HostIP: "127.0.0.1", HostPort: "5000"},
+			"4100": {
+				{HostIP: "127.0.0.1", HostPort: "4100"},
 			},
 		},
 	}
@@ -157,10 +156,11 @@ func TestMain(m *testing.M) {
 		_ = pool.Purge(resource)
 	}
 	// Check if running in DinD environment
+	// This value could be the DinD IP or any other necessary configuration
+	ip := getHostPort(resource, "4100/tcp")
+	endPoint = fmt.Sprintf("http://%s", ip)
 	if os.Getenv("RUN_IN_DIND") != "" {
-		// This value could be the DinD IP or any other necessary configuration
-		ip := getHostPort(resource, "5000/tcp")
-		endPoint = fmt.Sprintf("http://%s", ip)
+
 	}
 
 	if err := pool.Retry(func() error {
@@ -247,7 +247,6 @@ func TestAWSSqsSource_Pending(t *testing.T) {
 	assert.Nil(t, err)
 	awsSqsSource, err := NewAWSSqsSource(sqsClient, queue)
 	assert.Nil(t, err)
-	t.Log(awsSqsSource.queueURL)
 	// Pending Items are 2  As 2 messages are sent to Queue
 	pendingItems := awsSqsSource.Pending(context.TODO())
 	assert.Equal(t, int64(2), pendingItems)
@@ -262,7 +261,14 @@ func TestAWSSqsSource_Pending(t *testing.T) {
 		close(doneCh)
 	}()
 	<-doneCh
-	// Post Reading Pending Items should be 0
+
+	msg1 := <-messageCh
+	msg2 := <-messageCh
+
+	awsSqsSource.Ack(context.TODO(), TestAckRequest{
+		OffsetsValue: []sourcer.Offset{msg1.Offset(), msg2.Offset()},
+	})
+	// Post Acknowledging Pending Items should be 0
 	pendingItems = awsSqsSource.Pending(context.TODO())
 	assert.Equal(t, int64(0), pendingItems)
 	err = purgeQueue(sqsClient, queueURL)

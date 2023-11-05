@@ -48,13 +48,6 @@ jobs:
         run: |
           export RUN_IN_DIND=true
           make test
-          if [ $? -ne 0 ]; then
-            echo "Unit tests failed. Debugging..."
-            echo "Checking running Docker containers..."
-            docker ps
-            # Add more commands here to print additional debug information if necessary
-          fi
-
 
       - name: "Step 7: Run e2e  Tests"
         run: make test-e2e
