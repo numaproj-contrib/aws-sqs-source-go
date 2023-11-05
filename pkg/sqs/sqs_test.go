@@ -35,7 +35,7 @@ import (
 )
 
 const (
-	endPoint  = "http://localhost:8080"
+	endPoint  = "http://127.0.0.1:5000"
 	region    = "us-east-1"
 	accessKey = "access-key"
 	secretKey = "secret"
@@ -135,7 +135,7 @@ func TestMain(m *testing.M) {
 		ExposedPorts: []string{"5000"},
 		PortBindings: map[docker.Port][]docker.PortBinding{
 			"5000": {
-				{HostPort: "8080"},
+				{HostIP: "127.0.0.1", HostPort: "5000"},
 			},
 		},
 	}
