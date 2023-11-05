@@ -84,6 +84,10 @@ e2eapi-image: clean dist/e2eapi
 clean:
 	-rm -rf ${CURRENT_DIR}/dist
 
+install-numaflow:
+	kubectl create ns numaflow-system
+	kubectl apply -n numaflow-system -f https://raw.githubusercontent.com/numaproj/numaflow/stable/config/install.yaml
+
 
 
 
