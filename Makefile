@@ -9,7 +9,7 @@ VERSION?=latest
 
 DOCKER_PUSH?=true
 BASE_VERSION:=latest
-DOCKERIO_ORG=quay.io/numaproj
+DOCKERIO_ORG=quay.io/numaio
 PLATFORMS=linux/x86_64
 TARGET=aws-sqs-source-go
 
