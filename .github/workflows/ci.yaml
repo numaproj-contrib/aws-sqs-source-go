@@ -52,7 +52,9 @@ jobs:
           echo "IP Address: ${{ steps.getip.outputs.ip }}"    
 
       - name: "Step 6: Run Unit Tests"
-        run: make test
+        run: |
+          export RUN_IN_DIND=true
+          make test
 
       - name: "Step 7: Run e2e  Tests"
         run: make test-e2e

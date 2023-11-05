@@ -36,23 +36,12 @@ import (
 )
 
 var (
+	endPoint  = "http://127.0.0.1:5000"
 	region    = "us-east-1"
 	accessKey = "access-key"
 	secretKey = "secret"
 	queue     = "numaflow-tests-sqs-queue"
 )
-
-func getHostPort(resource *dockertest.Resource, id string) string {
-	dockerURL := os.Getenv("DOCKER_HOST")
-	if dockerURL == "" {
-		return resource.GetHostPort(id)
-	}
-	u, err := url.Parse(dockerURL)
-	if err != nil {
-		panic(err)
-	}
-	return u.Hostname() + ":" + resource.GetPort(id)
-}
 
 type TestReadRequest struct {
 	CountValue uint64
@@ -79,7 +68,7 @@ var resource *dockertest.Resource
 var pool *dockertest.Pool
 var sqsClient *sqs.SQS
 
-func initSess(endPoint string) *session.Session {
+func initSess() *session.Session {
 	sess := session.Must(session.NewSessionWithOptions(session.Options{
 		Config: aws.Config{
 			Region:      aws.String(region),
@@ -129,6 +118,17 @@ func purgeQueue(client *sqs.SQS, queueURL *string) error {
 	})
 	return err
 }
+func getHostPort(resource *dockertest.Resource, id string) string {
+	dockerURL := os.Getenv("DOCKER_HOST")
+	if dockerURL == "" {
+		return resource.GetHostPort(id)
+	}
+	u, err := url.Parse(dockerURL)
+	if err != nil {
+		panic(err)
+	}
+	return u.Hostname() + ":" + resource.GetPort(id)
+}
 
 // TestMain sets up the necessary infrastructure for testing by initializing a Docker pool,
 // launching a moto server container for emulating AWS SQS, and configuring the SQS client.
@@ -152,22 +152,25 @@ func TestMain(m *testing.M) {
 		},
 	}
 	resource, err = pool.RunWithOptions(&opts)
-	ip := getHostPort(resource, "5000/tcp")
-	endPoint := fmt.Sprintf("http://%s", ip)
 	if err != nil {
 		log.Fatalf("could not start resource %s", err)
 		_ = pool.Purge(resource)
 	}
+	// Check if running in DinD environment
+	if os.Getenv("RUN_IN_DIND") != "" {
+		// This value could be the DinD IP or any other necessary configuration
+		ip := getHostPort(resource, "5000/tcp")
+		endPoint = fmt.Sprintf("http://%s", ip)
+	}
 
 	if err := pool.Retry(func() error {
-		awsSession := initSess(endPoint)
+		awsSession := initSess()
 		sqsClient = sqs.New(awsSession)
 		return nil
 	}); err != nil {
 		_ = pool.Purge(resource)
 		log.Fatalf("could not connect to moto sqs %s", err)
 	}
-
 	code := m.Run()
 	if err := pool.Purge(resource); err != nil {
 		log.Fatalf("Couln't purge resource %s", err)
