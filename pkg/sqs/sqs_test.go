@@ -1,6 +1,20 @@
-//go:build test
-
 package sqs
+
+/*
+Copyright 2022 The Numaproj Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 
 import (
 	"context"
@@ -18,8 +32,6 @@ import (
 	"github.com/ory/dockertest/v3"
 	"github.com/ory/dockertest/v3/docker"
 	"github.com/stretchr/testify/assert"
-
-	"github.com/numaproj-contrib/aws-sqs-source-go/pkg/mocks"
 )
 
 const (
@@ -29,6 +41,27 @@ const (
 	secretKey = "secret"
 	queue     = "numaflow-tests-sqs-queue"
 )
+
+type TestReadRequest struct {
+	CountValue uint64
+	Timeout    time.Duration
+}
+
+func (r TestReadRequest) TimeOut() time.Duration {
+	return r.Timeout
+}
+
+func (r TestReadRequest) Count() uint64 {
+	return r.CountValue
+}
+
+type TestAckRequest struct {
+	OffsetsValue []sourcer.Offset
+}
+
+func (ar TestAckRequest) Offsets() []sourcer.Offset {
+	return ar.OffsetsValue
+}
 
 var resource *dockertest.Resource
 var pool *dockertest.Pool
@@ -104,8 +137,8 @@ func TestMain(m *testing.M) {
 	}
 	resource, err = pool.RunWithOptions(&opts)
 	if err != nil {
-		_ = pool.Purge(resource)
 		log.Fatalf("could not start resource %s", err)
+		_ = pool.Purge(resource)
 	}
 
 	if err := pool.Retry(func() error {
@@ -125,7 +158,7 @@ func TestMain(m *testing.M) {
 
 func TestAWSSqsSource_Read2Integ(t *testing.T) {
 	queueURL, err := setupQueue(sqsClient, queue)
-
+	assert.Nil(t, err)
 	err = sendMessages(sqsClient, queueURL, 2)
 	assert.Nil(t, err)
 	awsSqsSource, err := NewAWSSqsSource(sqsClient, queue)
@@ -134,7 +167,7 @@ func TestAWSSqsSource_Read2Integ(t *testing.T) {
 	doneCh := make(chan struct{})
 
 	go func() {
-		awsSqsSource.Read(context.TODO(), mocks.ReadRequest{
+		awsSqsSource.Read(context.TODO(), TestReadRequest{
 			CountValue: 2,
 			Timeout:    time.Second,
 		}, messageCh)
@@ -148,7 +181,7 @@ func TestAWSSqsSource_Read2Integ(t *testing.T) {
 	// We should get 0 messages, meaning the channel only holds the previous 2 messages
 	doneCh2 := make(chan struct{})
 	go func() {
-		awsSqsSource.Read(context.TODO(), mocks.ReadRequest{
+		awsSqsSource.Read(context.TODO(), TestReadRequest{
 			CountValue: 4,
 			Timeout:    time.Second,
 		}, messageCh)
@@ -161,7 +194,7 @@ func TestAWSSqsSource_Read2Integ(t *testing.T) {
 	msg1 := <-messageCh
 	msg2 := <-messageCh
 
-	awsSqsSource.Ack(context.TODO(), mocks.TestAckRequest{
+	awsSqsSource.Ack(context.TODO(), TestAckRequest{
 		OffsetsValue: []sourcer.Offset{msg1.Offset(), msg2.Offset()},
 	})
 	doneCh3 := make(chan struct{})
@@ -170,7 +203,7 @@ func TestAWSSqsSource_Read2Integ(t *testing.T) {
 	err = sendMessages(sqsClient, queueURL, 6)
 	assert.Nil(t, err)
 	go func() {
-		awsSqsSource.Read(context.TODO(), mocks.ReadRequest{
+		awsSqsSource.Read(context.TODO(), TestReadRequest{
 			CountValue: 6,
 			Timeout:    time.Second,
 		}, messageCh)
@@ -185,6 +218,7 @@ func TestAWSSqsSource_Read2Integ(t *testing.T) {
 
 func TestAWSSqsSource_Pending(t *testing.T) {
 	queueURL, err := setupQueue(sqsClient, queue)
+	assert.Nil(t, err)
 	err = sendMessages(sqsClient, queueURL, 2)
 	assert.Nil(t, err)
 	awsSqsSource, err := NewAWSSqsSource(sqsClient, queue)
@@ -196,7 +230,7 @@ func TestAWSSqsSource_Pending(t *testing.T) {
 	doneCh := make(chan struct{})
 
 	go func() {
-		awsSqsSource.Read(context.TODO(), mocks.ReadRequest{
+		awsSqsSource.Read(context.TODO(), TestReadRequest{
 			CountValue: 2,
 			Timeout:    time.Second,
 		}, messageCh)
