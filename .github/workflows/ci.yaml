@@ -45,17 +45,16 @@ jobs:
 
 
 
-      - name: "Step 7: Run unit  Tests"
+      - name: "Step 6: Run unit  Tests"
         run: make test
 
 
-
-      - name: "Step 8: Build and create docker image"
+      - name: "Step 7: Build and create docker image"
         run: make image
         env:
           TAG: ${{ env.IMAGE_TAG }}
 
-      - name: "Step 7: Docker Login"
+      - name: "Step 8: Docker Login"
         if: startsWith(github.ref, 'refs/tags/v')
         uses: docker/login-action@v2
         with:
@@ -63,7 +62,56 @@ jobs:
           username: ${{ secrets.QUAYIO_USERNAME }}
           password: ${{ secrets.QUAYIO_PASSWORD }}
 
-      - name: "Step 8: Build docker image"
+      - name: "Step 9: Build docker image"
         if: startsWith(github.ref, 'refs/tags/v')
         run: |
           docker push "quay.io/numaio/numaflow-go/aws-sqs-source-go:${{env.IMAGE_TAG}}"
+
+e2e:
+  name: Run E2E test
+  needs:
+    - build
+  runs-on: ubuntu-latest
+  timeout-minutes: 10
+  env:
+    GOPATH: /home/runner/go
+  steps:
+    - name: "Step 1: Checkout repository"
+      uses: actions/checkout@v3
+
+    - name: "Step 2: Download docker artifact"
+      uses: actions/download-artifact@v3
+      with:
+        name: aws-sqs-queue
+        path: /tmp
+
+    - name: "Step 3: Setup Golang"
+      uses: actions/setup-go@v4.0.0
+      with:
+        go-version: '1.21'
+
+    - name: "step 4: Add bins to PATH"
+      run: |
+        echo /home/runner/go/bin >> $GITHUB_PATH
+        echo /usr/local/bin >> $GITHUB_PATH
+
+    - name: "Step 5: Install k3d"
+      run: curl -s https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh | bash
+
+    - name: "Step 6: Create a registry and a cluster"
+      run: |
+        k3d registry create e2e-registry --port 5111
+        k3d cluster create e2e --registry-use k3d-e2e-registry:5111
+        k3d kubeconfig get e2e > ~/.kube/numaflow-e2e-config
+        echo '127.0.0.1 k3d-e2e-registry' | sudo tee -a /etc/hosts
+
+    - name: "Step 7: Load image in cluster"
+      run: |
+        docker load --input /tmp/aws-sqs-queue-image.tar
+        k3d image import "quay.io/numaio/numaflow-go/aws-sqs-source-go:latest" --cluster e2e
+
+    - name: "Step 8: Install Numaflow"
+      run: KUBECONFIG=~/.kube/numaflow-e2e-config make install-numaflow
+
+    - name: "step 9: Run E2E tests"
+      run: KUBECONFIG=~/.kube/numaflow-e2e-config make test-e2e

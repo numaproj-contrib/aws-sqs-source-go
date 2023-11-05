@@ -130,25 +130,25 @@ func TestMain(m *testing.M) {
 	}
 	pool = p
 
-	// Check if goaws container is already running
+	// Check if moto container is already running
 	containers, err := pool.Client.ListContainers(docker.ListContainersOptions{})
 	if err != nil {
 		log.Fatalf("could not list containers %s", err)
 	}
-	goawsRunning := false
+	motoRunning := false
 	for _, container := range containers {
 		for _, name := range container.Names {
 			if strings.Contains(name, "moto") {
-				goawsRunning = true
+				motoRunning = true
 				break
 			}
 		}
-		if goawsRunning {
+		if motoRunning {
 			break
 		}
 	}
 
-	if !goawsRunning {
+	if !motoRunning {
 		// Start goaws container if not already running
 		opts := dockertest.RunOptions{
 			Repository:   "motoserver/moto",
