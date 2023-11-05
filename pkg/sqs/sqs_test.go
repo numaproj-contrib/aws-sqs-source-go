@@ -36,7 +36,6 @@ import (
 )
 
 var (
-	endPoint  = "http://127.0.0.1:4100"
 	region    = "us-east-1"
 	accessKey = "access-key"
 	secretKey = "secret"
@@ -68,7 +67,7 @@ var resource *dockertest.Resource
 var pool *dockertest.Pool
 var sqsClient *sqs.SQS
 
-func initSess() *session.Session {
+func initSess(endPoint string) *session.Session {
 	sess := session.Must(session.NewSessionWithOptions(session.Options{
 		Config: aws.Config{
 			Region:      aws.String(region),
@@ -158,9 +157,9 @@ func TestMain(m *testing.M) {
 	// Check if running in DinD environment
 	// This value could be the DinD IP or any other necessary configuration
 	ip := getHostPort(resource, "4100/tcp")
-	endPoint = fmt.Sprintf("http://%s", ip)
+	endPoint := fmt.Sprintf("http://%s", ip)
 	if err := pool.Retry(func() error {
-		awsSession := initSess()
+		awsSession := initSess(endPoint)
 		sqsClient = sqs.New(awsSession)
 		return nil
 	}); err != nil {
