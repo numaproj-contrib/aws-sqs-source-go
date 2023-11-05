@@ -35,7 +35,7 @@ import (
 )
 
 const (
-	endPoint  = "http://127.0.0.1:5000"
+	endPoint  = "http://localhost:8080"
 	region    = "us-east-1"
 	accessKey = "access-key"
 	secretKey = "secret"
@@ -80,9 +80,13 @@ func initSess() *session.Session {
 }
 
 func sendMessages(client *sqs.SQS, queueURL *string, numMessages int) error {
+	// Check if queueURL is not nil and not an empty string
+	if queueURL == nil || *queueURL == "" {
+		return fmt.Errorf("invalid queue URL: %v", queueURL)
+	}
 	for i := 1; i <= numMessages; i++ {
 		sendParams := &sqs.SendMessageInput{
-			QueueUrl:    queueURL,
+			QueueUrl:    queueURL, // Ensure QueueUrl is set correctly here
 			MessageBody: aws.String(fmt.Sprintf("Test Message %d", i)),
 		}
 		_, err := client.SendMessage(sendParams)
@@ -131,7 +135,7 @@ func TestMain(m *testing.M) {
 		ExposedPorts: []string{"5000"},
 		PortBindings: map[docker.Port][]docker.PortBinding{
 			"5000": {
-				{HostIP: "127.0.0.1", HostPort: "5000"},
+				{HostPort: "8080"},
 			},
 		},
 	}
@@ -158,6 +162,7 @@ func TestMain(m *testing.M) {
 
 func TestAWSSqsSource_Read2Integ(t *testing.T) {
 	queueURL, err := setupQueue(sqsClient, queue)
+	assert.NotNil(t, queueURL)
 	assert.Nil(t, err)
 	err = sendMessages(sqsClient, queueURL, 2)
 	assert.Nil(t, err)
@@ -169,7 +174,7 @@ func TestAWSSqsSource_Read2Integ(t *testing.T) {
 	go func() {
 		awsSqsSource.Read(context.TODO(), TestReadRequest{
 			CountValue: 2,
-			Timeout:    10 * time.Second,
+			Timeout:    time.Second,
 		}, messageCh)
 		close(doneCh)
 	}()
@@ -183,7 +188,7 @@ func TestAWSSqsSource_Read2Integ(t *testing.T) {
 	go func() {
 		awsSqsSource.Read(context.TODO(), TestReadRequest{
 			CountValue: 4,
-			Timeout:    10 * time.Second,
+			Timeout:    time.Second,
 		}, messageCh)
 		close(doneCh2)
 	}()
@@ -205,7 +210,7 @@ func TestAWSSqsSource_Read2Integ(t *testing.T) {
 	go func() {
 		awsSqsSource.Read(context.TODO(), TestReadRequest{
 			CountValue: 6,
-			Timeout:    10 * time.Second,
+			Timeout:    time.Second,
 		}, messageCh)
 		close(doneCh3)
 	}()
@@ -218,6 +223,7 @@ func TestAWSSqsSource_Read2Integ(t *testing.T) {
 
 func TestAWSSqsSource_Pending(t *testing.T) {
 	queueURL, err := setupQueue(sqsClient, queue)
+	assert.NotNil(t, queueURL)
 	assert.Nil(t, err)
 	err = sendMessages(sqsClient, queueURL, 2)
 	assert.Nil(t, err)
@@ -233,7 +239,7 @@ func TestAWSSqsSource_Pending(t *testing.T) {
 	go func() {
 		awsSqsSource.Read(context.TODO(), TestReadRequest{
 			CountValue: 2,
-			Timeout:    10 * time.Second,
+			Timeout:    time.Second,
 		}, messageCh)
 		close(doneCh)
 	}()
