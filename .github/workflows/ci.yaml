@@ -67,7 +67,7 @@ jobs:
         run: |
           docker push "quay.io/numaio/numaflow-go/aws-sqs-source-go:${{env.IMAGE_TAG}}"
 
-e2e:
+  e2e:
   name: Run E2E test
   needs:
     - build
@@ -115,3 +115,6 @@ e2e:
 
     - name: "step 9: Run E2E tests"
       run: KUBECONFIG=~/.kube/numaflow-e2e-config make test-e2e
+
+
+
