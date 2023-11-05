@@ -35,7 +35,7 @@ import (
 )
 
 const (
-	endPoint  = "http://127.0.0.1:5000"
+	endPoint  = "http://host.docker.internal:5000"
 	region    = "us-east-1"
 	accessKey = "access-key"
 	secretKey = "secret"
