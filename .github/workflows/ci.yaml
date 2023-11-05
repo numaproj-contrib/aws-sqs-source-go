@@ -45,8 +45,8 @@ jobs:
 
 
 
-      - name: "Step 7: Run e2e  Tests"
-        run: make test-e2e
+      - name: "Step 7: Run unit  Tests"
+        run: make test
 
 
 
