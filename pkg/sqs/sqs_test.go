@@ -22,7 +22,6 @@ import (
 	"github.com/ory/dockertest/v3/docker"
 	"log"
 	"os"
-	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -37,7 +36,7 @@ import (
 )
 
 var (
-	endPoint  = "http://localhost:4100"
+	endPoint  = "http://127.0.0.1:5000"
 	region    = "us-east-1"
 	accessKey = "access-key"
 	secretKey = "secret"
@@ -139,7 +138,7 @@ func TestMain(m *testing.M) {
 	goawsRunning := false
 	for _, container := range containers {
 		for _, name := range container.Names {
-			if strings.Contains(name, "goaws") {
+			if strings.Contains(name, "moto") {
 				goawsRunning = true
 				break
 			}
@@ -150,21 +149,15 @@ func TestMain(m *testing.M) {
 	}
 
 	if !goawsRunning {
-		var tag string
-		switch runtime.GOARCH {
-		case "arm64":
-			tag = "latest-arm64"
-		default:
-			tag = "latest"
-		}
 		// Start goaws container if not already running
 		opts := dockertest.RunOptions{
-			Repository:   "admiralpiett/goaws",
-			Tag:          tag,
-			ExposedPorts: []string{"4100"},
+			Repository:   "motoserver/moto",
+			Env:          []string{"MOTO_PORT=5000"},
+			Tag:          "latest",
+			ExposedPorts: []string{"5000"},
 			PortBindings: map[docker.Port][]docker.PortBinding{
-				"4100": {
-					{HostIP: "127.0.0.1", HostPort: "4100"},
+				"5000": {
+					{HostIP: "127.0.0.1", HostPort: "5000"},
 				},
 			},
 		}

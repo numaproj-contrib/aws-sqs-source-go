@@ -12,9 +12,9 @@ jobs:
     runs-on: ubuntu-latest
     services:
       goaws:
-        image: admiralpiett/goaws
+        image: motoserver/moto
         ports:
-          - 4100:4100
+          - 5000:5000
     timeout-minutes: 10
     env:
       GOPATH: /home/runner/go
