@@ -10,6 +10,11 @@ jobs:
   aws-sqs-source-go:
     name: aws-sqs-source-go
     runs-on: ubuntu-latest
+    services:
+      goaws:
+        image: admiralpiett/goaws
+        ports:
+          - 4100:4100
     timeout-minutes: 10
     env:
       GOPATH: /home/runner/go
