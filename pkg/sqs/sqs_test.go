@@ -159,10 +159,6 @@ func TestMain(m *testing.M) {
 	// This value could be the DinD IP or any other necessary configuration
 	ip := getHostPort(resource, "4100/tcp")
 	endPoint = fmt.Sprintf("http://%s", ip)
-	if os.Getenv("RUN_IN_DIND") != "" {
-
-	}
-
 	if err := pool.Retry(func() error {
 		awsSession := initSess()
 		sqsClient = sqs.New(awsSession)
