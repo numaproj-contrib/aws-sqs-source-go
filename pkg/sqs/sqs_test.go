@@ -72,7 +72,7 @@ func initSess(endPoint string) *session.Session {
 		Config: aws.Config{
 			Region:      aws.String(region),
 			Credentials: credentials.NewStaticCredentials(accessKey, secretKey, ""),
-			Endpoint:    aws.String(endPoint),
+			Endpoint:    aws.String("http://localhost:4100"),
 		},
 		SharedConfigState: session.SharedConfigDisable,
 	}))
