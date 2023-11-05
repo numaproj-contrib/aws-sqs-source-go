@@ -68,7 +68,7 @@ jobs:
   e2e:
     name: Run E2E test
     needs:
-      - aws-sqs-source-go   # Corrected from 'build' to 'aws-sqs-source-go'
+      - build   # Corrected from 'build' to 'aws-sqs-source-go'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
