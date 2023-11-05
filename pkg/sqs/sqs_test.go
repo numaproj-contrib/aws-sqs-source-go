@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"github.com/ory/dockertest/v3/docker"
 	"log"
-	"net/url"
 	"os"
 	"runtime"
 	"strings"
@@ -119,17 +118,6 @@ func purgeQueue(client *sqs.SQS, queueURL *string) error {
 		QueueUrl: queueURL,
 	})
 	return err
-}
-func getHostPort(resource *dockertest.Resource, id string) string {
-	dockerURL := os.Getenv("DOCKER_HOST")
-	if dockerURL == "" {
-		return resource.GetHostPort(id)
-	}
-	u, err := url.Parse(dockerURL)
-	if err != nil {
-		panic(err)
-	}
-	return u.Hostname() + ":" + resource.GetPort(id)
 }
 
 // TestMain sets up the necessary infrastructure for testing by initializing a Docker pool,
