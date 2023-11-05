@@ -117,7 +117,7 @@ jobs:
       - name: "Step 7: Load image in cluster"
         run: |
           docker load --input /tmp/aws-sqs-queue-image.tar
-          k3d image import "quay.io/numaio/numaflow-go/aws-sqs-source-go:latest" --cluster e2e
+          k3d image import "quay.io/numaio/numaflow-go/aws-sqs-source-go:sqs-source" --cluster e2e
 
       - name: "Step 8: Install Numaflow"
         run: KUBECONFIG=~/.kube/numaflow-e2e-config make install-numaflow
