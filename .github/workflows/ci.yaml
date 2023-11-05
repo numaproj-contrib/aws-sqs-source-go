@@ -41,10 +41,18 @@ jobs:
       - name: "Step 6: Run Unit Tests"
         run: make test
 
-      - name: "Step 6: Run e2e  Tests"
+      - name: "Step 7: Run e2e  Tests"
         run: make test-e2e
 
-      - name: "Step 6: Build and create docker image"
+      - name: Get IP
+        id: getip
+        run: echo "::set-output name=ip::$(hostname -I | awk '{print $1}')"
+
+      - name: Print IP
+        run: |
+          echo "IP Address: ${{ steps.getip.outputs.ip }}"  
+
+      - name: "Step 8: Build and create docker image"
         run: make image
         env:
           TAG: ${{ env.IMAGE_TAG }}
