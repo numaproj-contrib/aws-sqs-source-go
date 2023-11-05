@@ -38,6 +38,12 @@ jobs:
       - name: "Step 5: Run Lint"
         run: make lint
 
+      - name: "Step 6: Run Unit Tests"
+        run: make test
+
+      - name: "Step 6: Run e2e  Tests"
+        run: make test-e2e
+
       - name: "Step 6: Build and create docker image"
         run: make image
         env:
