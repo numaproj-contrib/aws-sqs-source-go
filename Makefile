@@ -80,10 +80,7 @@ test-e2e:
 .PHONY: e2eapi-image
 e2eapi-image: clean dist/e2eapi
 				 DOCKER_BUILDKIT=1 $(DOCKER) build . --build-arg "ARCH=arm64" --target e2eapi --tag $(IMAGE_NAMESPACE)/e2eapi:$(VERSION) --build-arg VERSION="$(VERSION)"
-				 @if [[ "$(DOCKER_PUSH)" = "true" ]]; then $(DOCKER) push $(IMAGE_NAMESPACE)/e2eapi:$(VERSION); fi
- ifdef IMAGE_IMPORT_CMD
- 	$(IMAGE_IMPORT_CMD) $(IMAGE_NAMESPACE)/$(BINARY_NAME):$(VERSION)
- endif
+
 clean:
 	-rm -rf ${CURRENT_DIR}/dist
 
