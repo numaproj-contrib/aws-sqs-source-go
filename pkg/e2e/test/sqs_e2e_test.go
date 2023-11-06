@@ -1,6 +1,7 @@
 package test
 
 import (
+	"bytes"
 	"fmt"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
@@ -10,6 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 	"log"
+	"os/exec"
 	"testing"
 	"time"
 )
@@ -61,6 +63,17 @@ func CreateAWSSession(accessKey, region, secret, endPoint string) *session.Sessi
 
 func (suite *SqsSourceSuite) TestSqsSource() {
 	var testMessage = "aws_Sqs"
+	// Describe the e2e-api-pod to get more details.
+	describeCmd := exec.Command("kubectl", "describe", "pod", "e2e-api-pod", "-n", fixtures.Namespace)
+	var out bytes.Buffer
+	describeCmd.Stdout = &out
+	err := describeCmd.Run()
+	if err != nil {
+		suite.T().Logf("Error describing pod: %v", err)
+	} else {
+		// Output the describe command's output.
+		suite.T().Log(out.String())
+	}
 
 	suite.Given().When().WaitForPodReady("e2e-api-pod")
 
