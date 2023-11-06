@@ -40,14 +40,14 @@ spec:
             env:
               - name: AWS_REGION
                 value: "us-east-1"
-              - name: SQS_QUEUE_NAME
+              - name: AWS_QUEUE
                 value: "your-sqs-queue-name"
-              - name: AWS_ACCESS_KEY_ID
+              - name: AWS_ACCESS_KEY
                 valueFrom:
                   secretKeyRef:
                     name: aws-credentials
                     key: accessKeyId
-              - name: AWS_SECRET_ACCESS_KEY
+              - name: AWS_SECRET
                 valueFrom:
                   secretKeyRef:
                     name: aws-credentials
