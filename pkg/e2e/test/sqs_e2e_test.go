@@ -4,10 +4,6 @@ package test
 
 import (
 	"fmt"
-	"log"
-	"testing"
-	"time"
-
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -15,6 +11,9 @@ import (
 	"github.com/numaproj-contrib/numaflow-utils-go/testing/fixtures"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
+	"log"
+	"testing"
+	"time"
 )
 
 type SqsSourceSuite struct {
@@ -62,48 +61,63 @@ func CreateAWSSession(accessKey, region, secret, endPoint string) *session.Sessi
 	return sess
 }
 
-func (s *SqsSourceSuite) TestSqsSource() {
-	var message = "aws_Sqs"
+func (suite *SqsSourceSuite) TestSqsSource() {
+	var testMessage = "aws_Sqs"
 
-	// Create Moto resources used for mocking aws APIs.
-	deleteCMD := fmt.Sprintf("kubectl delete -k ../../config/apps/moto -n %s --ignore-not-found=true", fixtures.Namespace)
-	s.Given().When().Exec("sh", []string{"-c", deleteCMD}, fixtures.OutputRegexp(""))
-	createCMD := fmt.Sprintf("kubectl apply -k ../../config/apps/moto -n %s", fixtures.Namespace)
-	s.Given().When().Exec("sh", []string{"-c", createCMD}, fixtures.OutputRegexp("service/moto created"))
-	labelSelector := fmt.Sprintf("app=%s", "moto")
-	s.Given().When().WaitForStatefulSetReady(labelSelector)
-	s.T().Log("Moto resources are ready")
+	e2ePortForward := suite.StartPortForward("e2e-api-pod", 8378)
+	defer e2ePortForward()
+
+	// Create Redis Resource
+	redisDeleteCmd := fmt.Sprintf("kubectl delete -k ../../config/apps/redis -n %s --ignore-not-found=true", fixtures.Namespace)
+	suite.Given().When().Exec("sh", []string{"-c", redisDeleteCmd}, fixtures.OutputRegexp(""))
+	redisCreateCmd := fmt.Sprintf("kubectl apply -k ../../config/apps/redis -n %s", fixtures.Namespace)
+	suite.Given().When().Exec("sh", []string{"-c", redisCreateCmd}, fixtures.OutputRegexp("service/redis created"))
+	suite.T().Log("Redis resources are ready")
+
+	// Create Moto resources used for mocking AWS APIs.
+	motoDeleteCmd := fmt.Sprintf("kubectl delete -k ../../config/apps/moto -n %s --ignore-not-found=true", fixtures.Namespace)
+	suite.Given().When().Exec("sh", []string{"-c", motoDeleteCmd}, fixtures.OutputRegexp(""))
+	motoCreateCmd := fmt.Sprintf("kubectl apply -k ../../config/apps/moto -n %s", fixtures.Namespace)
+	suite.Given().When().Exec("sh", []string{"-c", motoCreateCmd}, fixtures.OutputRegexp("service/moto created"))
+	motoLabelSelector := fmt.Sprintf("app=%s", "moto")
+	suite.Given().When().WaitForStatefulSetReady(motoLabelSelector)
+	suite.T().Log("Moto resources are ready")
 	time.Sleep(10 * time.Second) // waiting for resources to be ready completely
 
-	s.T().Log("port forwarding moto service")
-	stopPortForward := s.StartPortForward("moto-0", 5000)
-	defer stopPortForward()
-	sess := CreateAWSSession(AWS_ACCESS_KEY, AWS_REGION, AWS_SECRET, AWS_ENDPOINT)
-	// Create queue client
-	sqsClient := sqs.New(sess)
-	url, err := setupQueue(sqsClient, AWS_QUEUE)
-	assert.Nil(s.T(), err)
+	suite.T().Log("port forwarding moto service")
+	motoPortForwardStop := suite.StartPortForward("moto-0", 5000)
+	defer motoPortForwardStop()
+
+	awsSession := CreateAWSSession(AWS_ACCESS_KEY, AWS_REGION, AWS_SECRET, AWS_ENDPOINT)
+	// Create SQS client
+	sqsClient := sqs.New(awsSession)
+	queueURL, err := setupQueue(sqsClient, AWS_QUEUE)
+	assert.Nil(suite.T(), err)
+
 	stopChan := make(chan struct{})
-	w := s.Given().Pipeline("@testdata/sqs_source.yaml").When().CreatePipelineAndWait()
-	w.Expect().VertexPodsRunning()
+	workflow := suite.Given().Pipeline("@testdata/sqs_source.yaml").When().CreatePipelineAndWait()
+	workflow.Expect().VertexPodsRunning()
+
 	go func() {
 		for {
-			err = SendMessage(sqsClient, *url, message)
-			if err != nil {
-				log.Fatalf("Error in Sending Message %s", err)
+			sendErr := SendMessage(sqsClient, *queueURL, testMessage)
+			if sendErr != nil {
+				log.Fatalf("Error in Sending Message: %s", sendErr)
 			}
 			select {
 			case <-stopChan:
-				log.Println("Exit sending Message To Queue.....")
+				log.Println("Stopped sending messages to queue.")
 				return
 			default:
-				continue
+				// Continue sending messages at a specific interval, if needed
+				time.Sleep(1 * time.Second)
 			}
 		}
 	}()
-	assert.Nil(s.T(), err)
-	defer w.DeletePipelineAndWait()
-	w.Expect().SinkContains("redis-sink", message, fixtures.WithTimeout(2*time.Minute))
+
+	assert.Nil(suite.T(), err)
+	defer workflow.DeletePipelineAndWait()
+	workflow.Expect().SinkContains("redis-sink", testMessage, fixtures.WithTimeout(2*time.Minute))
 	stopChan <- struct{}{}
 }
 
