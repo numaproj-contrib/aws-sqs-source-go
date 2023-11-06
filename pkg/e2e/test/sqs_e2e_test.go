@@ -67,6 +67,9 @@ func (suite *SqsSourceSuite) TestSqsSource() {
 	suite.Given().When().Exec("sh", []string{"-c", e2eDeleteCmd}, fixtures.OutputRegexp(""))
 	e2eCreateCmd := fmt.Sprintf("kubectl apply -k ../../e2e/manifests -n %s", fixtures.Namespace)
 	suite.Given().When().Exec("sh", []string{"-c", e2eCreateCmd}, fixtures.OutputRegexp("pod/e2e-api-pod created"))
+	//e2eLabelSelector := fmt.Sprintf("app=%s", "numaflow-e2e")
+	suite.Given().When().WaitForPodReady("e2e-api-pod")
+
 	suite.T().Log("e2e Api resources are ready")
 	time.Sleep(10 * time.Second)
 
@@ -78,6 +81,7 @@ func (suite *SqsSourceSuite) TestSqsSource() {
 	suite.Given().When().Exec("sh", []string{"-c", redisDeleteCmd}, fixtures.OutputRegexp(""))
 	redisCreateCmd := fmt.Sprintf("kubectl apply -k ../../config/apps/redis -n %s", fixtures.Namespace)
 	suite.Given().When().Exec("sh", []string{"-c", redisCreateCmd}, fixtures.OutputRegexp("service/redis created"))
+
 	suite.T().Log("Redis resources are ready")
 
 	// Create Moto resources used for mocking AWS APIs.

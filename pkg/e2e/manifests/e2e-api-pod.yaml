@@ -3,7 +3,7 @@ kind: Pod
 metadata:
   name: e2e-api-pod
   labels:
-    numaflow-e2e: "true"
+    name: "e2e-api-pod"
 spec:
   containers:
     - name: main
