@@ -62,12 +62,6 @@ func CreateAWSSession(accessKey, region, secret, endPoint string) *session.Sessi
 func (suite *SqsSourceSuite) TestSqsSource() {
 	var testMessage = "aws_Sqs"
 
-	// Create Redis Resource
-	e2eDeleteCmd := fmt.Sprintf("kubectl delete -k ../../e2e/manifests -n %s --ignore-not-found=true", fixtures.Namespace)
-	suite.Given().When().Exec("sh", []string{"-c", e2eDeleteCmd}, fixtures.OutputRegexp(""))
-	e2eCreateCmd := fmt.Sprintf("kubectl apply -k ../../e2e/manifests -n %s", fixtures.Namespace)
-	suite.Given().When().Exec("sh", []string{"-c", e2eCreateCmd}, fixtures.OutputRegexp("pod/e2e-api-pod created"))
-	//e2eLabelSelector := fmt.Sprintf("app=%s", "numaflow-e2e")
 	suite.Given().When().WaitForPodReady("e2e-api-pod")
 
 	suite.T().Log("e2e Api resources are ready")
