@@ -55,7 +55,7 @@ imagepush: build
 .PHONY: dist/e2eapi
 dist/e2eapi:
 	ls -al ./pkg/e2e/  # Diagnostic command to list contents
-	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -v -o ${DIST_DIR}/e2eapi ./pkg/e2e/e2e-api
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -v -o ${DIST_DIR}/e2eapi ./pkg/e2e/e2e-api
 
 .PHONY: cleanup-e2e
 cleanup-e2e:
