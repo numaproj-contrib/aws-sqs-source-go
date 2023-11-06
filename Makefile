@@ -35,8 +35,8 @@ endif
 .PHONY: build image lint clean test imagepush install-numaflow
 
 build: clean
-	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -v -o ./dist/aws-sqs-source-go-amd64 main.go
-	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -v -o ./dist/aws-sqs-source-go-arm64 main.go
+    CGO_ENABLED=0 GOOS=linux GOARCH=$(TARGET_ARCH) go build -v -o ./dist/aws-sqs-source-go-$(TARGET_ARCH) main.go
+
 
 image: build
 	docker buildx build --no-cache -t "$(DOCKERIO_ORG)/numaflow-go/aws-sqs-source-go:$(IMAGE_TAG)" --platform $(PLATFORMS) --target $(TARGET) . --load
