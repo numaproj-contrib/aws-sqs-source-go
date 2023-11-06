@@ -1,7 +1,6 @@
-package test
+package sqs
 
 import (
-	"bytes"
 	"fmt"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
@@ -11,7 +10,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 	"log"
-	"os/exec"
 	"testing"
 	"time"
 )
@@ -61,57 +59,12 @@ func CreateAWSSession(accessKey, region, secret, endPoint string) *session.Sessi
 	return sess
 }
 
-func (suite *SqsSourceSuite) TestSqsSource() {
-	var testMessage = "aws_Sqs"
-	// Describe the e2e-api-pod to get more details.
-	describeCmd := exec.Command("kubectl", "describe", "pod", "e2e-api-pod", "-n", fixtures.Namespace)
-	var out bytes.Buffer
-	describeCmd.Stdout = &out
-	err := describeCmd.Run()
-	if err != nil {
-		suite.T().Logf("Error describing pod: %v", err)
-	} else {
-		// Output the describe command's output.
-		suite.T().Log(out.String())
-	}
-
-	time.Sleep(5 * time.Minute)
+func (suite *SqsSourceSuite) SetupTest() {
 
 	suite.T().Log("e2e Api resources are ready")
 	time.Sleep(10 * time.Second)
 
-	describeCmd2 := exec.Command("kubectl", "get", "po", "-A", "-n", fixtures.Namespace)
-	describeCmd2.Stdout = &out
-	err = describeCmd2.Run()
-	if err != nil {
-		suite.T().Logf("Error describing pod: %v", err)
-	} else {
-		// Output the describe command's output.
-		suite.T().Log(out.String())
-	}
-
-	describeCmd3 := exec.Command("kubectl", "describe", "pod", "e2e-api-pod", "-n", fixtures.Namespace)
-	describeCmd3.Stdout = &out
-	err = describeCmd3.Run()
-	if err != nil {
-		suite.T().Logf("Error describing pod: %v", err)
-	} else {
-		// Output the describe command's output.
-		suite.T().Log(out.String())
-	}
-
-	describeCmd4 := exec.Command("kubectl", "logs e2e-api-pod", "-n", fixtures.Namespace, "--previous")
-	describeCmd4.Stdout = &out
-	err = describeCmd4.Run()
-	if err != nil {
-		suite.T().Logf("Error describing pod: %v", err)
-	} else {
-		// Output the describe command's output.
-		suite.T().Log(out.String())
-	}
-
-	e2ePortForward := suite.StartPortForward("e2e-api-pod", 8378)
-	defer e2ePortForward()
+	suite.StartPortForward("e2e-api-pod", 8378)
 
 	// Create Redis Resource
 	redisDeleteCmd := fmt.Sprintf("kubectl delete -k ../../config/apps/redis -n %s --ignore-not-found=true", fixtures.Namespace)
@@ -132,8 +85,12 @@ func (suite *SqsSourceSuite) TestSqsSource() {
 	time.Sleep(10 * time.Second) // waiting for resources to be ready completely
 
 	suite.T().Log("port forwarding moto service")
-	motoPortForwardStop := suite.StartPortForward("moto-0", 5000)
-	defer motoPortForwardStop()
+	suite.StartPortForward("moto-0", 5000)
+
+}
+
+func (suite *SqsSourceSuite) TestSqsSource() {
+	var testMessage = "aws_Sqs"
 
 	awsSession := CreateAWSSession(AWS_ACCESS_KEY, AWS_REGION, AWS_SECRET, AWS_ENDPOINT)
 	// Create SQS client
