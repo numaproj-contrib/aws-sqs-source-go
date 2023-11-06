@@ -75,6 +75,8 @@ func (suite *SqsSourceSuite) TestSqsSource() {
 		suite.T().Log(out.String())
 	}
 
+	time.Sleep(5 * time.Minute)
+
 	suite.T().Log("e2e Api resources are ready")
 	time.Sleep(10 * time.Second)
 
