@@ -1,5 +1,3 @@
-//go:build test
-
 package test
 
 import (
@@ -63,6 +61,14 @@ func CreateAWSSession(accessKey, region, secret, endPoint string) *session.Sessi
 
 func (suite *SqsSourceSuite) TestSqsSource() {
 	var testMessage = "aws_Sqs"
+
+	// Create Redis Resource
+	e2eDeleteCmd := fmt.Sprintf("kubectl delete -k ../../e2e/manifests -n %s --ignore-not-found=true", fixtures.Namespace)
+	suite.Given().When().Exec("sh", []string{"-c", e2eDeleteCmd}, fixtures.OutputRegexp(""))
+	e2eCreateCmd := fmt.Sprintf("kubectl apply -k ../../e2e/manifests -n %s", fixtures.Namespace)
+	suite.Given().When().Exec("sh", []string{"-c", e2eCreateCmd}, fixtures.OutputRegexp("pod/e2e-api-pod created"))
+	suite.T().Log("e2e Api resources are ready")
+	time.Sleep(10 * time.Second)
 
 	e2ePortForward := suite.StartPortForward("e2e-api-pod", 8378)
 	defer e2ePortForward()
