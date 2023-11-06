@@ -372,6 +372,7 @@ github.com/modern-go/reflect2 v1.0.2 h1:xBagoLtFs94CBntxluKeaWgTMpvLxC4ur3nMaC9G
 github.com/modern-go/reflect2 v1.0.2/go.mod h1:yWuevngMOJpCy52FWWMvUC8ws7m/LJsjYzDa0/r8luk=
 github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 h1:C3w9PqII01/Oq1c1nUAm88MOHcQC9l5mIlSMApZMrHA=
 github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822/go.mod h1:+n7T8mK8HuQTcFwEeznm/DIxMOiR9yIdICNftLE1DvQ=
+github.com/numaproj-contrib/numaflow-utils-go v0.0.4/go.mod h1:OLkyOBIeksgS1PdKASyw+7qyfZrQc2xrjY+4Ky0ujY8=
 github.com/numaproj/numaflow v0.11.0 h1:gcWMI73nb8lnpAV5wYejIjDxUH3W7C3fQTD9ZewLfY8=
 github.com/numaproj/numaflow v0.11.0/go.mod h1:wVhsWBN8a04UKSyULNpPzLuzkG2TcEhS5IteWrUhRHE=
 github.com/numaproj/numaflow-go v0.5.2 h1:U/57eDqodVVpzLQqMR/iql8eQf6HsgFMbnWCUU69HZA=
