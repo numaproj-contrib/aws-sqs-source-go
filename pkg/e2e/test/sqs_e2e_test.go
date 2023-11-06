@@ -75,10 +75,18 @@ func (suite *SqsSourceSuite) TestSqsSource() {
 		suite.T().Log(out.String())
 	}
 
-	suite.Given().When().WaitForPodReady("e2e-api-pod")
-
 	suite.T().Log("e2e Api resources are ready")
 	time.Sleep(10 * time.Second)
+
+	describeCmd2 := exec.Command("kubectl", "get", "po", "-A", "-n", fixtures.Namespace)
+	describeCmd2.Stdout = &out
+	err = describeCmd2.Run()
+	if err != nil {
+		suite.T().Logf("Error describing pod: %v", err)
+	} else {
+		// Output the describe command's output.
+		suite.T().Log(out.String())
+	}
 
 	e2ePortForward := suite.StartPortForward("e2e-api-pod", 8378)
 	defer e2ePortForward()
