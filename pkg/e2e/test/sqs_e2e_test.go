@@ -70,6 +70,9 @@ func (suite *SqsSourceSuite) TestSqsSource() {
 	suite.T().Log("e2e Api resources are ready")
 	time.Sleep(10 * time.Second)
 
+	e2ePortForward := suite.StartPortForward("e2e-api-pod", 8378)
+	defer e2ePortForward()
+
 	// Create Redis Resource
 	redisDeleteCmd := fmt.Sprintf("kubectl delete -k ../../config/apps/redis -n %s --ignore-not-found=true", fixtures.Namespace)
 	suite.Given().When().Exec("sh", []string{"-c", redisDeleteCmd}, fixtures.OutputRegexp(""))
