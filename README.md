@@ -107,7 +107,61 @@ Congratulations! You have successfully set up an AWS SQS source in a Numaflow pi
 
 ## How to Use the AWS SQS Source in Your Own Numaflow Pipeline
 
-For a detailed guide on integrating AWS SQS as a source in your own Numaflow pipeline, including creating necessary IAM roles and permissions, see [Using AWS SQS Source in Your Numaflow Pipeline](#using-aws-sqs-source-in-your-own-numaflow-pipeline).
+**Prerequisites:**
+- Ensure Numaflow is installed on your Kubernetes cluster.
+- Your AWS CLI should be configured to access AWS SQS.
+
+**Step-by-step Guide:**
+
+1. **Create an AWS SQS Queue:**
+    - Use the AWS CLI or log in to the AWS Management Console to create a new SQS queue.
+
+2. **Deploy a Numaflow Pipeline with AWS SQS Source:**
+    - Prepare a Kubernetes manifest file, let’s say `sqs-source-pipeline.yaml`. Here's a template to get you started:
+
+      ```yaml
+      apiVersion: numaflow.numaproj.io/v1alpha1
+      kind: Pipeline
+      metadata:
+        name: sqs-source-pipeline
+      spec:
+        vertices:
+          - name: sqs-source
+            source:
+              udflex:
+                container:
+                  image: your-repo/aws-sqs-source-go:v1.0.0
+                  env:
+                    - name: AWS_REGION
+                      value: "us-east-1"
+                    - name: AWS_QUEUE
+                      value: "your-sqs-queue-name"
+                    - name: AWS_ACCESS_KEY
+                      valueFrom:
+                        secretKeyRef:
+                          name: aws-credentials
+                          key: accessKeyId
+                    - name: AWS_SECRET
+                      valueFrom:
+                        secretKeyRef:
+                          name: aws-credentials
+                          key: secretAccessKey
+          - name: log-sink
+            sink:
+              log: {}
+        edges:
+          - from: sqs-source
+            to: log-sink
+      ```
+
+    - Modify the image path, AWS region, queue name, and AWS credentials as per your configuration.
+    - Apply the configuration to your cluster by running:
+
+      ```bash
+      kubectl apply -f sqs-source-pipeline.yaml
+      ```
+
+By following these steps, you'll have an AWS SQS queue as a source for your Numaflow pipeline running in Kubernetes. Messages from the SQS queue will be fetched by the pipeline and passed to the log sink, where they can be processed as per your pipeline logic.
 
 ## Using JSON Format to Specify the AWS SQS Source Configuration
 
@@ -115,9 +169,64 @@ While YAML is the default configuration format, the AWS SQS source also supports
 
 ## Using Environment Variables to Specify the AWS SQS Source Configuration
 
-The AWS SQS source can alternatively be configured through environment variables. See [Using Environment Variables to Specify the AWS SQS Source Configuration](#using-environment-variables-to-specify-the-aws-sqs-source-configuration) for details.
+To configure the AWS SQS source in your Numaflow pipeline using environment variables, you can follow this process:
 
-## Debugging AWS SQS Source
+**Using Environment Variables for AWS SQS Source Configuration:**
+
+1. **Set up Environment Variables:**
+   - Define environment variables on your Kubernetes deployment to hold the necessary AWS SQS configuration such as the region, queue name, and credentials.
+   - For example, you can set `AWS_REGION`, `AWS_QUEUE`, `AWS_ACCESS_KEY`, and `AWS_SECRET` as environment variables in your pipeline deployment.
+
+2. **Modify Your Pipeline Configuration:**
+   - In your Numaflow pipeline definition (`sqs-source-pipeline.yaml`), you will reference these environment variables. Ensure your source container in the pipeline specification is configured to use these variables.
+
+Here's an example snippet for your Kubernetes manifest file:
+
+```yaml
+apiVersion: numaflow.numaproj.io/v1alpha1
+kind: Pipeline
+metadata:
+  name: sqs-source-pipeline
+spec:
+  vertices:
+    - name: sqs-source
+      source:
+        udflex:
+          container:
+            image: your-repo/aws-sqs-source-go:v1.0.0
+            env:
+              - name: AWS_REGION
+                valueFrom:
+                  secretKeyRef:
+                    name: aws-env-variables
+                    key: region
+              - name: AWS_QUEUE
+                valueFrom:
+                  secretKeyRef:
+                    name: aws-env-variables
+                    key: queueName
+              - name: AWS_ACCESS_KEY
+                valueFrom:
+                  secretKeyRef:
+                    name: aws-env-variables
+                    key: accessKeyID
+              - name: AWS_SECRET
+                valueFrom:
+                  secretKeyRef:
+                    name: aws-env-variables
+                    key: secretAccessKey
+```
+
+3. **Deploy the Configuration:**
+   - Apply the updated pipeline configuration to your Kubernetes cluster using the command:
+
+     ```bash
+     kubectl apply -f sqs-source-pipeline.yaml
+     ```
+
+By configuring your pipeline in this manner, it allows the AWS SQS source to dynamically retrieve the configuration from the environment variables, making it easier to manage credentials and configuration changes.
+
+
 
 To enable debugging, set the `DEBUG` environment variable to `true` within the AWS SQS source container. This will output additional log messages for troubleshooting.
 See - [Debugging](https://numaflow.numaproj.io/development/debugging/)
