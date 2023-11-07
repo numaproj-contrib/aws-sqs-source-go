@@ -21,8 +21,11 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/ory/dockertest/v3/docker"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
@@ -30,7 +33,6 @@ import (
 	"github.com/aws/aws-sdk-go/service/sqs"
 	"github.com/numaproj/numaflow-go/pkg/sourcer"
 	"github.com/ory/dockertest/v3"
-	"github.com/ory/dockertest/v3/docker"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -80,9 +82,13 @@ func initSess() *session.Session {
 }
 
 func sendMessages(client *sqs.SQS, queueURL *string, numMessages int) error {
+	// Check if queueURL is not nil and not an empty string
+	if queueURL == nil || *queueURL == "" {
+		return fmt.Errorf("invalid queue URL: %v", queueURL)
+	}
 	for i := 1; i <= numMessages; i++ {
 		sendParams := &sqs.SendMessageInput{
-			QueueUrl:    queueURL,
+			QueueUrl:    queueURL, // Ensure QueueUrl is set correctly here
 			MessageBody: aws.String(fmt.Sprintf("Test Message %d", i)),
 		}
 		_, err := client.SendMessage(sendParams)
@@ -124,21 +130,43 @@ func TestMain(m *testing.M) {
 		log.Fatalf("could not connect to docker ;is it running ? %s", err)
 	}
 	pool = p
-	opts := dockertest.RunOptions{
-		Repository:   "motoserver/moto",
-		Tag:          "latest",
-		Env:          []string{"MOTO_PORT=5000"},
-		ExposedPorts: []string{"5000"},
-		PortBindings: map[docker.Port][]docker.PortBinding{
-			"5000": {
-				{HostIP: "127.0.0.1", HostPort: "5000"},
-			},
-		},
-	}
-	resource, err = pool.RunWithOptions(&opts)
+
+	// Check if moto container is already running
+	containers, err := pool.Client.ListContainers(docker.ListContainersOptions{})
 	if err != nil {
-		log.Fatalf("could not start resource %s", err)
-		_ = pool.Purge(resource)
+		log.Fatalf("could not list containers %s", err)
+	}
+	motoRunning := false
+	for _, container := range containers {
+		for _, name := range container.Names {
+			if strings.Contains(name, "moto") {
+				motoRunning = true
+				break
+			}
+		}
+		if motoRunning {
+			break
+		}
+	}
+
+	if !motoRunning {
+		// Start goaws container if not already running
+		opts := dockertest.RunOptions{
+			Repository:   "motoserver/moto",
+			Env:          []string{"MOTO_PORT=5000"},
+			Tag:          "latest",
+			ExposedPorts: []string{"5000"},
+			PortBindings: map[docker.Port][]docker.PortBinding{
+				"5000": {
+					{HostIP: "127.0.0.1", HostPort: "5000"},
+				},
+			},
+		}
+		resource, err = pool.RunWithOptions(&opts)
+		if err != nil {
+			log.Fatalf("could not start resource %s", err)
+			_ = pool.Purge(resource)
+		}
 	}
 
 	if err := pool.Retry(func() error {
@@ -146,18 +174,23 @@ func TestMain(m *testing.M) {
 		sqsClient = sqs.New(awsSession)
 		return nil
 	}); err != nil {
-		_ = pool.Purge(resource)
+		if resource != nil {
+			_ = pool.Purge(resource)
+		}
 		log.Fatalf("could not connect to moto sqs %s", err)
 	}
 	code := m.Run()
-	if err := pool.Purge(resource); err != nil {
-		log.Fatalf("Couln't purge resource %s", err)
+	if resource != nil {
+		if err := pool.Purge(resource); err != nil {
+			log.Fatalf("Couln't purge resource %s", err)
+		}
 	}
 	os.Exit(code)
 }
 
 func TestAWSSqsSource_Read2Integ(t *testing.T) {
 	queueURL, err := setupQueue(sqsClient, queue)
+	assert.NotNil(t, queueURL)
 	assert.Nil(t, err)
 	err = sendMessages(sqsClient, queueURL, 2)
 	assert.Nil(t, err)
@@ -218,6 +251,7 @@ func TestAWSSqsSource_Read2Integ(t *testing.T) {
 
 func TestAWSSqsSource_Pending(t *testing.T) {
 	queueURL, err := setupQueue(sqsClient, queue)
+	assert.NotNil(t, queueURL)
 	assert.Nil(t, err)
 	err = sendMessages(sqsClient, queueURL, 2)
 	assert.Nil(t, err)
@@ -237,7 +271,14 @@ func TestAWSSqsSource_Pending(t *testing.T) {
 		close(doneCh)
 	}()
 	<-doneCh
-	// Post Reading Pending Items should be 0
+
+	msg1 := <-messageCh
+	msg2 := <-messageCh
+
+	awsSqsSource.Ack(context.TODO(), TestAckRequest{
+		OffsetsValue: []sourcer.Offset{msg1.Offset(), msg2.Offset()},
+	})
+	// Post Acknowledging Pending Items should be 0
 	pendingItems = awsSqsSource.Pending(context.TODO())
 	assert.Equal(t, int64(0), pendingItems)
 	err = purgeQueue(sqsClient, queueURL)

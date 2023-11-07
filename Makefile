@@ -1,17 +1,31 @@
 SHELL:=/bin/bash
+TARGET_ARCH?=amd64
 
 PACKAGE=github.com/numaproj-contrib/aws-sqs-source-go
 CURRENT_DIR=$(shell pwd)
 DIST_DIR=${CURRENT_DIR}/dist
 BINARY_NAME:=aws-sqs-source-go
-IMAGE_NAMESPACE?=quay.io/numaio/numaflow-go
+IMAGE_NAMESPACE?=quay.io/numaproj
 VERSION?=latest
 
-DOCKER_PUSH?=true
+override LDFLAGS += \
+  -X ${PACKAGE}.version=${VERSION} \
+  -X ${PACKAGE}.buildDate=${BUILD_DATE} \
+  -X ${PACKAGE}.gitCommit=${GIT_COMMIT} \
+  -X ${PACKAGE}.gitTreeState=${GIT_TREE_STATE}
+
+
+DOCKER_PUSH?=false
 BASE_VERSION:=latest
-DOCKERIO_ORG=quay.io/numaproj
+DOCKERIO_ORG=quay.io/numaio
 PLATFORMS=linux/x86_64
 TARGET=aws-sqs-source-go
+
+
+ifneq (${GIT_TAG},)
+VERSION=$(GIT_TAG)
+override LDFLAGS += -X ${PACKAGE}.gitTag=${GIT_TAG}
+endif
 
 IMAGE_TAG=$(TAG)
 ifeq ($(IMAGE_TAG),)
@@ -47,14 +61,13 @@ lint:
 
 test:
 	@echo "Running integration tests..."
-	@go test ./pkg/sqs/*
+	@go test -race ./pkg/sqs/*
 
 imagepush: build
 	docker buildx build --no-cache -t "$(DOCKERIO_ORG)/numaflow-go/aws-sqs-source-go:$(IMAGE_TAG)" --platform $(PLATFORMS) --target $(TARGET) . --push
 
-.PHONY: dist/e2eapi
 dist/e2eapi:
-	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -v -o ${DIST_DIR}/e2eapi ./pkg/e2e/e2e-api
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -v -ldflags '${LDFLAGS}' -o ${DIST_DIR}/e2eapi ./test/e2e-api
 
 .PHONY: cleanup-e2e
 cleanup-e2e:
@@ -71,21 +84,24 @@ test-e2e:
 	$(MAKE) e2eapi-image
 	kubectl -n numaflow-system delete po -lapp.kubernetes.io/component=controller-manager,app.kubernetes.io/part-of=numaflow
 	kubectl -n numaflow-system delete po e2e-api-pod  --ignore-not-found=true
-	cat pkg/e2e/manifests/e2e-api-pod.yaml |  sed 's@quay.io/numaio/numaflow-go/@$(IMAGE_NAMESPACE)/@' | sed 's/:latest/:$(VERSION)/' | kubectl -n numaflow-system apply -f -
+	cat test/manifests/e2e-api-pod.yaml |  sed 's@quay.io/numaio/numaflow-go/@$(IMAGE_NAMESPACE)/@' | sed 's/:latest/:$(VERSION)/' | kubectl -n numaflow-system apply -f -
 	go generate $(shell find ./pkg/e2e/test$* -name '*.go')
-	go test -v -timeout 15m -count 1 --tags test -p 1 ./pkg/e2e/test/sqs_e2e_test.go
+	go test -v -timeout 15m -count 1 --tags test -p 1 ./test/sqs/sqs_e2e_test.go
 	$(MAKE) cleanup-e2e
 
 .PHONY: e2eapi-image
 e2eapi-image: clean dist/e2eapi
-				 DOCKER_BUILDKIT=1 $(DOCKER) build . --build-arg "ARCH=arm64" --target e2eapi --tag $(IMAGE_NAMESPACE)/e2eapi:$(VERSION) --build-arg VERSION="$(VERSION)"
-				 @if [[ "$(DOCKER_PUSH)" = "true" ]]; then $(DOCKER) push $(IMAGE_NAMESPACE)/e2eapi:$(VERSION); fi
- ifdef IMAGE_IMPORT_CMD
- 	$(IMAGE_IMPORT_CMD) $(IMAGE_NAMESPACE)/$(BINARY_NAME):$(VERSION)
- endif
-
+	DOCKER_BUILDKIT=1 $(DOCKER) build . --build-arg "ARCH=amd64" --target e2eapi --tag $(IMAGE_NAMESPACE)/e2eapi:$(VERSION) --build-arg VERSION="$(VERSION)"
+	@if [[ "$(DOCKER_PUSH)" = "true" ]]; then $(DOCKER) push $(IMAGE_NAMESPACE)/e2eapi:$(VERSION); fi
+ifdef IMAGE_IMPORT_CMD
+	$(IMAGE_IMPORT_CMD) $(IMAGE_NAMESPACE)/e2eapi:$(VERSION)
+endif
 clean:
 	-rm -rf ${CURRENT_DIR}/dist
+
+install-numaflow:
+	kubectl create ns numaflow-system
+	kubectl apply -n numaflow-system -f https://raw.githubusercontent.com/numaproj/numaflow/stable/config/install.yaml
 
 
 

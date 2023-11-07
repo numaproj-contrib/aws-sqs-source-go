@@ -4,7 +4,7 @@ go 1.21.3
 
 require (
 	github.com/aws/aws-sdk-go v1.46.3
-	github.com/numaproj-contrib/numaflow-utils-go v0.0.3
+	github.com/numaproj-contrib/numaflow-utils-go v0.0.4
 	github.com/numaproj/numaflow-go v0.5.2
 	github.com/ory/dockertest/v3 v3.10.0
 	github.com/redis/go-redis/v9 v9.2.1
