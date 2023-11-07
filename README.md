@@ -120,7 +120,7 @@ The AWS SQS source can alternatively be configured through environment variables
 ## Debugging AWS SQS Source
 
 To enable debugging, set the `DEBUG` environment variable to `true` within the AWS SQS source container. This will output additional log messages for troubleshooting.
-Reference - [Debugging](https://numaflow.numaproj.io/development/debugging/)
+See - [Debugging](https://numaflow.numaproj.io/development/debugging/)
 
 ## Additional Resources
 
