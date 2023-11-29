@@ -1,4 +1,4 @@
-//go:build test
+////go:build test
 
 /*
 Copyright 2022 The Numaproj Authors.
@@ -19,15 +19,16 @@ limitations under the License.
 package sqs
 
 import (
+	"context"
 	"fmt"
 	"log"
+	"os"
 	"testing"
 	"time"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/credentials"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/sqs"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/sqs"
 	"github.com/numaproj-contrib/numaflow-utils-go/testing/fixtures"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
@@ -38,19 +39,14 @@ type SqsSourceSuite struct {
 }
 
 const (
-	AWS_ACCESS_KEY = "access-key"
-	AWS_REGION     = "us-east-1"
-	AWS_SECRET     = "access-secret"
-	AWS_QUEUE      = "numaflow-test"
-	AWS_ENDPOINT   = "http://127.0.0.1:5000"
+	queueName = "numaflow-test"
 )
 
-func setupQueue(client *sqs.SQS, queueName string) (*string, error) {
+func setupQueue(client *sqs.Client, queueName string, ctx context.Context) (*string, error) {
 	params := &sqs.CreateQueueInput{
 		QueueName: aws.String(queueName),
 	}
-
-	response, err := client.CreateQueue(params)
+	response, err := client.CreateQueue(ctx, params)
 	if err != nil {
 		fmt.Println("Error creating queue:", err)
 		return nil, err
@@ -58,30 +54,41 @@ func setupQueue(client *sqs.SQS, queueName string) (*string, error) {
 	return response.QueueUrl, nil
 }
 
-func sendMessage(sqsClient *sqs.SQS, queueUrl string, messageBody string) error {
-	_, err := sqsClient.SendMessage(&sqs.SendMessageInput{
-		QueueUrl:    &queueUrl,
-		MessageBody: aws.String(messageBody),
+func initClient(ctx context.Context) (*sqs.Client, error) {
+	// Load default configs for aws based on env variable provided based on
+	// https://aws.github.io/aws-sdk-go-v2/docs/configuring-sdk/#specifying-credentials
+	cfg, err := config.LoadDefaultConfig(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed loading aws config, err: %v", err)
+	}
+	client := sqs.NewFromConfig(cfg, func(options *sqs.Options) {
+		options.BaseEndpoint = aws.String(os.Getenv("AWS_ENDPOINT_URL"))
 	})
-	return err
+	return client, nil
 }
 
-func CreateAWSSession(accessKey, region, secret, endPoint string) *session.Session {
-	sess := session.Must(session.NewSessionWithOptions(session.Options{
-		Config: aws.Config{
-			Region:      aws.String(region),
-			Credentials: credentials.NewStaticCredentials(accessKey, secret, ""),
-			Endpoint:    aws.String(endPoint),
-		},
-		SharedConfigState: session.SharedConfigDisable,
-	}))
-	return sess
+func sendMessages(client *sqs.Client, queueURL *string, numMessages int, testMessage string, ctx context.Context) error {
+	// Check if queueURL is not nil and not an empty string
+	if queueURL == nil || *queueURL == "" {
+		return fmt.Errorf("invalid queue URL: %v", queueURL)
+	}
+	for i := 1; i <= numMessages; i++ {
+		sendParams := &sqs.SendMessageInput{
+			QueueUrl:    queueURL, // Ensure QueueUrl is set correctly here
+			MessageBody: aws.String(testMessage),
+		}
+		_, err := client.SendMessage(ctx, sendParams)
+		if err != nil {
+			fmt.Printf("Failed to send message %d: %s\n", i, err)
+			return err
+		}
+	}
+	return nil
 }
 
 func (suite *SqsSourceSuite) SetupTest() {
 
 	suite.T().Log("e2e Api resources are ready")
-
 	suite.StartPortForward("e2e-api-pod", 8378)
 
 	// Create Redis Resource
@@ -100,7 +107,7 @@ func (suite *SqsSourceSuite) SetupTest() {
 	motoLabelSelector := fmt.Sprintf("app=%s", "moto")
 	suite.Given().When().WaitForStatefulSetReady(motoLabelSelector)
 	suite.T().Log("Moto resources are ready")
-	time.Sleep(10 * time.Second)
+	time.Sleep(1 * time.Minute)
 
 	suite.T().Log("port forwarding moto service")
 	suite.StartPortForward("moto-0", 5000)
@@ -109,11 +116,12 @@ func (suite *SqsSourceSuite) SetupTest() {
 
 func (suite *SqsSourceSuite) TestSqsSource() {
 	var testMessage = "aws_Sqs"
-
-	awsSession := CreateAWSSession(AWS_ACCESS_KEY, AWS_REGION, AWS_SECRET, AWS_ENDPOINT)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	client, err := initClient(ctx)
+	assert.Nil(suite.T(), err)
 	// Create SQS client
-	sqsClient := sqs.New(awsSession)
-	queueURL, err := setupQueue(sqsClient, AWS_QUEUE)
+	queueURL, err := setupQueue(client, queueName, ctx)
 	assert.Nil(suite.T(), err)
 
 	stopChan := make(chan struct{})
@@ -122,7 +130,7 @@ func (suite *SqsSourceSuite) TestSqsSource() {
 
 	go func() {
 		for {
-			sendErr := sendMessage(sqsClient, *queueURL, testMessage)
+			sendErr := sendMessages(client, queueURL, 10, testMessage, ctx)
 			if sendErr != nil {
 				log.Fatalf("Error in Sending Message: %s", sendErr)
 			}
