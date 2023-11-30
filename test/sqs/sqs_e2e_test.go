@@ -49,7 +49,6 @@ func setupQueue(client *sqs.Client, queueName string, ctx context.Context) (*str
 		fmt.Println("Error creating queue:", err)
 		return nil, err
 	}
-	log.Println("queue url", *response.QueueUrl)
 	return response.QueueUrl, nil
 }
 
@@ -101,12 +100,10 @@ func (suite *SqsSourceSuite) SetupTest() {
 	suite.Given().When().Exec("sh", []string{"-c", motoCreateCmd}, fixtures.OutputRegexp("service/moto created"))
 	motoLabelSelector := fmt.Sprintf("app=%s", "moto")
 	suite.Given().When().WaitForStatefulSetReady(motoLabelSelector)
+	suite.Given().When().WaitForPodReady("moto-0", motoLabelSelector)
 	suite.T().Log("Moto resources are ready")
-	time.Sleep(1 * time.Minute)
-
 	suite.T().Log("port forwarding moto service")
 	suite.StartPortForward("moto-0", 5000)
-
 }
 
 func (suite *SqsSourceSuite) TestSqsSource() {
@@ -139,7 +136,6 @@ func (suite *SqsSourceSuite) TestSqsSource() {
 			}
 		}
 	}()
-
 	assert.Nil(suite.T(), err)
 	defer workflow.DeletePipelineAndWait()
 	workflow.Expect().SinkContains("redis-sink", testMessage, fixtures.WithTimeout(2*time.Minute))
