@@ -1,19 +1,17 @@
-////go:build test
-
 /*
-Copyright 2022 The Numaproj Authors.
+   Copyright 2022 The Numaproj Authors.
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
 
-    http://www.apache.org/licenses/LICENSE-2.0
+       http://www.apache.org/licenses/LICENSE-2.0
 
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
 */
 
 package sqs
@@ -39,7 +37,7 @@ type SqsSourceSuite struct {
 }
 
 const (
-	queueName = "numaflow-test"
+	queueName = "testing"
 )
 
 func setupQueue(client *sqs.Client, queueName string, ctx context.Context) (*string, error) {
@@ -51,6 +49,7 @@ func setupQueue(client *sqs.Client, queueName string, ctx context.Context) (*str
 		fmt.Println("Error creating queue:", err)
 		return nil, err
 	}
+	log.Println("queue url", *response.QueueUrl)
 	return response.QueueUrl, nil
 }
 
@@ -67,25 +66,21 @@ func initClient(ctx context.Context) (*sqs.Client, error) {
 	return client, nil
 }
 
-func sendMessages(client *sqs.Client, queueURL *string, numMessages int, testMessage string, ctx context.Context) error {
+func sendMessages(client *sqs.Client, queueURL *string, testMessage string, ctx context.Context) error {
 	// Check if queueURL is not nil and not an empty string
 	if queueURL == nil || *queueURL == "" {
 		return fmt.Errorf("invalid queue URL: %v", queueURL)
 	}
-	for i := 1; i <= numMessages; i++ {
-		sendParams := &sqs.SendMessageInput{
-			QueueUrl:    queueURL, // Ensure QueueUrl is set correctly here
-			MessageBody: aws.String(testMessage),
-		}
-		_, err := client.SendMessage(ctx, sendParams)
-		if err != nil {
-			fmt.Printf("Failed to send message %d: %s\n", i, err)
-			return err
-		}
+	sendParams := &sqs.SendMessageInput{
+		QueueUrl:    queueURL, // Ensure QueueUrl is set correctly here
+		MessageBody: aws.String(testMessage),
+	}
+	_, err := client.SendMessage(ctx, sendParams)
+	if err != nil {
+		return err
 	}
 	return nil
 }
-
 func (suite *SqsSourceSuite) SetupTest() {
 
 	suite.T().Log("e2e Api resources are ready")
@@ -130,7 +125,7 @@ func (suite *SqsSourceSuite) TestSqsSource() {
 
 	go func() {
 		for {
-			sendErr := sendMessages(client, queueURL, 10, testMessage, ctx)
+			sendErr := sendMessages(client, queueURL, testMessage, ctx)
 			if sendErr != nil {
 				log.Fatalf("Error in Sending Message: %s", sendErr)
 			}

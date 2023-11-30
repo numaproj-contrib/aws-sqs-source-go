@@ -56,7 +56,7 @@ func initClient(ctx context.Context, awsEndpoint string) (*awsSqs.Client, error)
 
 func getQueueUrl(client *awsSqs.Client, sqsQueueName string, ctx context.Context) (*awsSqs.GetQueueUrlOutput, error) {
 	// generate the queue url to publish data to queue via queue name.
-	queueURL, err := client.GetQueueUrl(ctx, &awsSqs.GetQueueUrlInput{QueueName: aws.String(os.Getenv(sqsQueueName))})
+	queueURL, err := client.GetQueueUrl(ctx, &awsSqs.GetQueueUrlInput{QueueName: aws.String(sqsQueueName)})
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate SQS Queue url, err: %v", err)
 	}
@@ -74,7 +74,7 @@ func main() {
 	}
 	queue, err := getQueueUrl(client, queueName, ctx)
 	if err != nil {
-		log.Fatalf("error getting queue url ,does queue exists?,error - %s", err)
+		log.Fatalf("error getting queue url for %s,does queue exists?,error - %s", queueName, err)
 	}
 	awsSqsSource := sqs.NewAWSSqsSource(client, queue.QueueUrl)
 	err = sourcer.NewServer(awsSqsSource).Start(context.Background())
