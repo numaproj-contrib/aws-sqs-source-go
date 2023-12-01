@@ -31,8 +31,8 @@ import (
 const (
 	approximateNumberOfMessages           = "ApproximateNumberOfMessages"
 	approximateNumberOfMessagesNotVisible = "ApproximateNumberOfMessagesNotVisible"
-	maxNumberOfMessages                   = 10 // MaxNumberOfMessages is messages to return From SQS Valid values: 1 to 10. Default: 1
-	waitTimeSeconds                       = 20 // WaitTimeSeconds specifies the time (in seconds) the call waits for a message to arrive in the queue before returning. If a message arrives, the call returns early; if not and the time expires, it returns an empty message list.
+	maxNumberOfMessages                   = 10 // maxNumberOfMessages is messages to return From SQS Valid values: 1 to 10. Default: 1
+	waitTimeSeconds                       = 20 // waitTimeSeconds specifies the time (in seconds) the call waits for a message to arrive in the queue before returning. If a message arrives, the call returns early; if not and the time expires, it returns an empty message list.
 )
 
 // AWSSqsSource represents an AWS SQS source with necessary attributes.
@@ -48,8 +48,8 @@ func NewAWSSqsSource(client *sqs.Client, queueURL *string) *AWSSqsSource {
 	}
 }
 
-// GetApproximateMessageCount retrieves the approximate count of messages from an AWS SQS queue based on the given queryType.
-// The queryType can be either "approximateNumberOfMessages" or "ApproximateNumberOfMessagesNotVisible".
+// getApproximateMessageCount retrieves the approximate count of messages from an AWS SQS queue based on the given queryType.
+// The queryType can be either "approximateNumberOfMessages" or "approximateNumberOfMessagesNotVisible".
 // This function fetches the respective attribute from the SQS queue, converts it to an integer, and returns the value.
 // If an error occurs during fetching the attributes or converting the value, it logs the error and returns -1.
 func (s *AWSSqsSource) getApproximateMessageCount(queryType string) (int64, error) {
