@@ -7,22 +7,20 @@ spec:
     readBatchSize: 10 # for aws sqs the batch size should be between 1 -  10 - SQS Valid values: 1 to 10. Default: 1
   vertices:
     - name: in
-      scale:
-        min: 1
       source:
         udsource:
           container:
             image: "quay.io/numaio/numaflow-go/aws-sqs-source-go:latest"
             env:
-              - name: AWS_QUEUE
-                value: "numaflow-test"
+              - name: AWS_SQS_QUEUE_NAME
+                value: "testing"
               - name: AWS_REGION
                 value: "us-east-1"
-              - name: AWS_ACCESS_KEY
-                value: "access-key"
-              - name: AWS_SECRET
-                value: "access-secret"
-              - name: AWS_END_POINT
+              - name: AWS_ACCESS_KEY_ID
+                value: "testing"
+              - name: AWS_SECRET_ACCESS_KEY
+                value: "testing"
+              - name: AWS_ENDPOINT_URL
                 value: "http://moto.numaflow-system.svc.cluster.local:5000"
     - name: redis-sink
       sink:

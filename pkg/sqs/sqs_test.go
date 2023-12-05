@@ -25,12 +25,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/sqs"
 	"github.com/ory/dockertest/v3/docker"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/credentials"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/sqs"
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/numaproj/numaflow-go/pkg/sourcer"
 	"github.com/ory/dockertest/v3"
 	"github.com/stretchr/testify/assert"
@@ -41,7 +40,7 @@ const (
 	region    = "us-east-1"
 	accessKey = "access-key"
 	secretKey = "secret"
-	queue     = "numaflow-tests-sqs-queue"
+	queueName = "numaflow-tests-sqs-queue"
 )
 
 type TestReadRequest struct {
@@ -67,21 +66,37 @@ func (ar TestAckRequest) Offsets() []sourcer.Offset {
 
 var resource *dockertest.Resource
 var pool *dockertest.Pool
-var sqsClient *sqs.SQS
 
-func initSess() *session.Session {
-	sess := session.Must(session.NewSessionWithOptions(session.Options{
-		Config: aws.Config{
-			Region:      aws.String(region),
-			Credentials: credentials.NewStaticCredentials(accessKey, secretKey, ""),
-			Endpoint:    aws.String(endPoint),
-		},
-		SharedConfigState: session.SharedConfigDisable,
-	}))
-	return sess
+func setupQueue(client *sqs.Client, queueName string, ctx context.Context) (*string, error) {
+	params := &sqs.CreateQueueInput{
+		QueueName: aws.String(queueName),
+	}
+	response, err := client.CreateQueue(ctx, params)
+	if err != nil {
+		fmt.Println("Error creating queue:", err)
+		return nil, err
+	}
+	return response.QueueUrl, nil
+}
+func initClient(ctx context.Context, awsEndpoint string) (*sqs.Client, error) {
+	// Load default configs for aws based on env variable provided based on
+	// https://aws.github.io/aws-sdk-go-v2/docs/configuring-sdk/#specifying-credentials
+	cfg, err := config.LoadDefaultConfig(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed loading aws config, err: %v", err)
+	}
+	var client *sqs.Client
+	if awsEndpoint != "" {
+		client = sqs.NewFromConfig(cfg, func(options *sqs.Options) {
+			options.BaseEndpoint = aws.String(awsEndpoint)
+		})
+	} else {
+		client = sqs.NewFromConfig(cfg)
+	}
+	return client, nil
 }
 
-func sendMessages(client *sqs.SQS, queueURL *string, numMessages int) error {
+func sendMessages(client *sqs.Client, queueURL *string, numMessages int, ctx context.Context) error {
 	// Check if queueURL is not nil and not an empty string
 	if queueURL == nil || *queueURL == "" {
 		return fmt.Errorf("invalid queue URL: %v", queueURL)
@@ -91,7 +106,7 @@ func sendMessages(client *sqs.SQS, queueURL *string, numMessages int) error {
 			QueueUrl:    queueURL, // Ensure QueueUrl is set correctly here
 			MessageBody: aws.String(fmt.Sprintf("Test Message %d", i)),
 		}
-		_, err := client.SendMessage(sendParams)
+		_, err := client.SendMessage(ctx, sendParams)
 		if err != nil {
 			fmt.Printf("Failed to send message %d: %s\n", i, err)
 			return err
@@ -100,21 +115,8 @@ func sendMessages(client *sqs.SQS, queueURL *string, numMessages int) error {
 	return nil
 }
 
-func setupQueue(client *sqs.SQS, queueName string) (*string, error) {
-	params := &sqs.CreateQueueInput{
-		QueueName: aws.String(queueName),
-	}
-
-	response, err := client.CreateQueue(params)
-	if err != nil {
-		fmt.Println("Error creating queue:", err)
-		return nil, err
-	}
-	return response.QueueUrl, nil
-}
-
-func purgeQueue(client *sqs.SQS, queueURL *string) error {
-	_, err := client.PurgeQueue(&sqs.PurgeQueueInput{
+func purgeQueue(client *sqs.Client, queueURL *string, ctx context.Context) error {
+	_, err := client.PurgeQueue(ctx, &sqs.PurgeQueueInput{
 		QueueUrl: queueURL,
 	})
 	return err
@@ -124,6 +126,13 @@ func purgeQueue(client *sqs.SQS, queueURL *string) error {
 // launching a moto server container for emulating AWS SQS, and configuring the SQS client.
 // It also ensures proper cleanup of resources after tests are executed.
 func TestMain(m *testing.M) {
+	// set aws env variable
+	os.Setenv("AWS_ACCESS_KEY_ID", accessKey)
+	os.Setenv("AWS_ENDPOINT_URL", endPoint)
+	os.Setenv("AWS_SECRET_ACCESS_KEY", secretKey)
+	os.Setenv("AWS_REGION", region)
+	os.Setenv("AWS_SQS_QUEUE_NAME", queueName)
+
 	// connect to docker
 	p, err := dockertest.NewPool("")
 	if err != nil {
@@ -164,14 +173,12 @@ func TestMain(m *testing.M) {
 		}
 		resource, err = pool.RunWithOptions(&opts)
 		if err != nil {
-			log.Fatalf("could not start resource %s", err)
 			_ = pool.Purge(resource)
+			log.Fatalf("could not start resource %s", err)
 		}
 	}
 
 	if err := pool.Retry(func() error {
-		awsSession := initSess()
-		sqsClient = sqs.New(awsSession)
 		return nil
 	}); err != nil {
 		if resource != nil {
@@ -189,13 +196,17 @@ func TestMain(m *testing.M) {
 }
 
 func TestAWSSqsSource_Read2Integ(t *testing.T) {
-	queueURL, err := setupQueue(sqsClient, queue)
-	assert.NotNil(t, queueURL)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	client, err := initClient(ctx, endPoint)
 	assert.Nil(t, err)
-	err = sendMessages(sqsClient, queueURL, 2)
+	queueUrl, err := setupQueue(client, queueName, ctx)
 	assert.Nil(t, err)
-	awsSqsSource, err := NewAWSSqsSource(sqsClient, queue)
+	awsSqsSource := NewAWSSqsSource(client, queueUrl)
 	assert.Nil(t, err)
+	err = sendMessages(awsSqsSource.sqsServiceClient, awsSqsSource.queueURL, 2, ctx)
+	assert.Nil(t, err)
+
 	messageCh := make(chan sourcer.Message, 20)
 	doneCh := make(chan struct{})
 
@@ -233,7 +244,7 @@ func TestAWSSqsSource_Read2Integ(t *testing.T) {
 	doneCh3 := make(chan struct{})
 
 	// Send 6 more messages
-	err = sendMessages(sqsClient, queueURL, 6)
+	err = sendMessages(awsSqsSource.sqsServiceClient, awsSqsSource.queueURL, 6, ctx)
 	assert.Nil(t, err)
 	go func() {
 		awsSqsSource.Read(context.TODO(), TestReadRequest{
@@ -245,20 +256,24 @@ func TestAWSSqsSource_Read2Integ(t *testing.T) {
 	<-doneCh3
 	assert.Equal(t, 6, len(messageCh))
 
-	err = purgeQueue(sqsClient, queueURL)
+	err = purgeQueue(awsSqsSource.sqsServiceClient, awsSqsSource.queueURL, ctx)
 	assert.Nil(t, err)
 }
 
 func TestAWSSqsSource_Pending(t *testing.T) {
-	queueURL, err := setupQueue(sqsClient, queue)
-	assert.NotNil(t, queueURL)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	client, err := initClient(ctx, endPoint)
 	assert.Nil(t, err)
-	err = sendMessages(sqsClient, queueURL, 2)
+	queueUrl, err := setupQueue(client, queueName, ctx)
 	assert.Nil(t, err)
-	awsSqsSource, err := NewAWSSqsSource(sqsClient, queue)
+	awsSqsSource := NewAWSSqsSource(client, queueUrl)
 	assert.Nil(t, err)
+	err = sendMessages(awsSqsSource.sqsServiceClient, awsSqsSource.queueURL, 2, ctx)
+	assert.Nil(t, err)
+
 	// Pending Items are 2  As 2 messages are sent to Queue
-	pendingItems := awsSqsSource.Pending(context.TODO())
+	pendingItems := awsSqsSource.Pending(ctx)
 	assert.Equal(t, int64(2), pendingItems)
 	messageCh := make(chan sourcer.Message, 20)
 	doneCh := make(chan struct{})
@@ -281,6 +296,6 @@ func TestAWSSqsSource_Pending(t *testing.T) {
 	// Post Acknowledging Pending Items should be 0
 	pendingItems = awsSqsSource.Pending(context.TODO())
 	assert.Equal(t, int64(0), pendingItems)
-	err = purgeQueue(sqsClient, queueURL)
+	err = purgeQueue(awsSqsSource.sqsServiceClient, awsSqsSource.queueURL, ctx)
 	assert.Nil(t, err)
 }
