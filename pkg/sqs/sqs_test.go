@@ -206,7 +206,6 @@ func TestAWSSqsSource_Read2Integ(t *testing.T) {
 	assert.Nil(t, err)
 	err = sendMessages(awsSqsSource.sqsServiceClient, awsSqsSource.queueURL, 2, ctx)
 	assert.Nil(t, err)
-
 	messageCh := make(chan sourcer.Message, 20)
 	doneCh := make(chan struct{})
 
@@ -219,16 +218,13 @@ func TestAWSSqsSource_Read2Integ(t *testing.T) {
 	}()
 	<-doneCh
 	assert.Equal(t, 2, len(messageCh))
-
 	// Ack the first batch
 	msg1 := <-messageCh
 	msg2 := <-messageCh
-
 	awsSqsSource.Ack(context.TODO(), TestAckRequest{
 		OffsetsValue: []sourcer.Offset{msg1.Offset(), msg2.Offset()},
 	})
 	doneCh3 := make(chan struct{})
-
 	// Send 6 more messages
 	err = sendMessages(awsSqsSource.sqsServiceClient, awsSqsSource.queueURL, 6, ctx)
 	assert.Nil(t, err)
