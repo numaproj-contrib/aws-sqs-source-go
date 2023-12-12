@@ -29,10 +29,9 @@ import (
 )
 
 const (
-	approximateNumberOfMessages           = "ApproximateNumberOfMessages"
-	approximateNumberOfMessagesNotVisible = "ApproximateNumberOfMessagesNotVisible"
-	maxNumberOfMessages                   = 10 // maxNumberOfMessages is messages to return From SQS Valid values: 1 to 10. Default: 1
-	waitTimeSeconds                       = 20 // waitTimeSeconds specifies the time (in seconds) the call waits for a message to arrive in the queue before returning. If a message arrives, the call returns early; if not and the time expires, it returns an empty message list.
+	approximateNumberOfMessages = "ApproximateNumberOfMessages"
+	maxNumberOfMessages         = 10 // maxNumberOfMessages is messages to return From SQS Valid values: 1 to 10. Default: 1
+	waitTimeSeconds             = 20 // waitTimeSeconds specifies the time (in seconds) the call waits for a message to arrive in the queue before returning. If a message arrives, the call returns early; if not and the time expires, it returns an empty message list.
 )
 
 // AWSSqsSource represents an AWS SQS source with necessary attributes.
@@ -88,14 +87,7 @@ func (s *AWSSqsSource) Read(_ context.Context, readRequest sourcesdk.ReadRequest
 
 	ctx, cancel := context.WithTimeout(context.Background(), readRequest.TimeOut())
 	defer cancel()
-	// If we have un-acked data (data which is received but yet to be deleted from the queue
-	count, err := s.getApproximateMessageCount(approximateNumberOfMessagesNotVisible)
-	if err != nil {
-		log.Fatalf("error getting approximate number of messages not visible from queue %s", err)
-	}
-	if count > 0 {
-		return
-	}
+
 	if readRequest.Count() <= maxNumberOfMessages {
 		readRequestCount = int32(readRequest.Count())
 	}
