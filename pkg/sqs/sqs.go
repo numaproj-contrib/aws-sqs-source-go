@@ -18,14 +18,14 @@ limitations under the License.
 
 import (
 	"context"
-	"log"
-	"strconv"
-	"time"
-
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
 	"github.com/aws/aws-sdk-go-v2/service/sqs/types"
 	sourcesdk "github.com/numaproj/numaflow-go/pkg/sourcer"
+	"log"
+	"strconv"
+	"sync"
+	"time"
 )
 
 const (
@@ -37,13 +37,17 @@ const (
 // AWSSqsSource represents an AWS SQS source with necessary attributes.
 type AWSSqsSource struct {
 	queueURL         *string
+	toAckSet         map[string]struct{}
 	sqsServiceClient *sqs.Client
+	lock             *sync.Mutex
 }
 
 func NewAWSSqsSource(client *sqs.Client, queueURL *string) *AWSSqsSource {
 	return &AWSSqsSource{
 		sqsServiceClient: client,
 		queueURL:         queueURL,
+		toAckSet:         make(map[string]struct{}),
+		lock:             new(sync.Mutex),
 	}
 }
 
@@ -83,8 +87,11 @@ func (s *AWSSqsSource) Pending(_ context.Context) int64 {
 
 // Read fetches messages from the SQS queue and sends them to the provided message channel.
 func (s *AWSSqsSource) Read(_ context.Context, readRequest sourcesdk.ReadRequest, messageCh chan<- sourcesdk.Message) {
+	// If we have un-acked data, we return without reading any new data.
+	if len(s.toAckSet) > 0 {
+		return
+	}
 	var readRequestCount int32 = 10
-
 	ctx, cancel := context.WithTimeout(context.Background(), readRequest.TimeOut())
 	defer cancel()
 
@@ -97,22 +104,21 @@ func (s *AWSSqsSource) Read(_ context.Context, readRequest sourcesdk.ReadRequest
 		MaxNumberOfMessages: readRequestCount,
 	})
 	if err != nil {
-		log.Fatalln("Error receiving message:", err)
+		log.Printf("error receiving message:%s", err)
+		return
 	}
 	msgs := msgResult.Messages
 	for i := 0; i < len(msgs); i++ {
-		select {
-		case <-ctx.Done():
-			return
-		default:
-			messageCh <- sourcesdk.NewMessage(
-				[]byte(*msgs[i].Body),
-				// The ReceiptHandle is a unique identifier for the received message and is required to delete it from the queue
-				// partitionId 0 As sqs doesn't have partitions
-				sourcesdk.NewOffset([]byte(*msgs[i].ReceiptHandle), "0"),
-				time.Now(), // TODO: Send the time when the message was sent to queue
-			)
-		}
+		s.lock.Lock()
+		messageCh <- sourcesdk.NewMessage(
+			[]byte(*msgs[i].Body),
+			// The ReceiptHandle is a unique identifier for the received message and is required to delete it from the queue
+			// partitionId 0 As sqs doesn't have partitions
+			sourcesdk.NewOffset([]byte(*msgs[i].ReceiptHandle), "0"),
+			time.Now(),
+		)
+		s.toAckSet[*msgs[i].ReceiptHandle] = struct{}{}
+		s.lock.Unlock()
 	}
 }
 
@@ -126,5 +132,6 @@ func (s *AWSSqsSource) Ack(ctx context.Context, request sourcesdk.AckRequest) {
 		if err != nil {
 			log.Fatalln("Failed to delete message:", err)
 		}
+		delete(s.toAckSet, string(offset.Value()))
 	}
 }

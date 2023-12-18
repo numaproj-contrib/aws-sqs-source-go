@@ -218,6 +218,21 @@ func TestAWSSqsSource_Read2Integ(t *testing.T) {
 	}()
 	<-doneCh
 	assert.Equal(t, 2, len(messageCh))
+	doneCh2 := make(chan struct{})
+
+	// Try reading 4 more messages
+	// Since the previous batch didn't get acked, the data source shouldn't allow us to read more messages
+	// We should get 0 messages, meaning the channel only holds the previous 2 messages
+	go func() {
+		awsSqsSource.Read(context.TODO(), TestReadRequest{
+			CountValue: 4,
+			Timeout:    time.Second,
+		}, messageCh)
+		close(doneCh2)
+	}()
+	<-doneCh2
+	assert.Equal(t, 2, len(messageCh))
+
 	// Ack the first batch
 	msg1 := <-messageCh
 	msg2 := <-messageCh
