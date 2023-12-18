@@ -206,7 +206,6 @@ func TestAWSSqsSource_Read2Integ(t *testing.T) {
 	assert.Nil(t, err)
 	err = sendMessages(awsSqsSource.sqsServiceClient, awsSqsSource.queueURL, 2, ctx)
 	assert.Nil(t, err)
-
 	messageCh := make(chan sourcer.Message, 20)
 	doneCh := make(chan struct{})
 
@@ -219,11 +218,11 @@ func TestAWSSqsSource_Read2Integ(t *testing.T) {
 	}()
 	<-doneCh
 	assert.Equal(t, 2, len(messageCh))
+	doneCh2 := make(chan struct{})
 
 	// Try reading 4 more messages
 	// Since the previous batch didn't get acked, the data source shouldn't allow us to read more messages
 	// We should get 0 messages, meaning the channel only holds the previous 2 messages
-	doneCh2 := make(chan struct{})
 	go func() {
 		awsSqsSource.Read(context.TODO(), TestReadRequest{
 			CountValue: 4,
@@ -237,12 +236,10 @@ func TestAWSSqsSource_Read2Integ(t *testing.T) {
 	// Ack the first batch
 	msg1 := <-messageCh
 	msg2 := <-messageCh
-
 	awsSqsSource.Ack(context.TODO(), TestAckRequest{
 		OffsetsValue: []sourcer.Offset{msg1.Offset(), msg2.Offset()},
 	})
 	doneCh3 := make(chan struct{})
-
 	// Send 6 more messages
 	err = sendMessages(awsSqsSource.sqsServiceClient, awsSqsSource.queueURL, 6, ctx)
 	assert.Nil(t, err)
