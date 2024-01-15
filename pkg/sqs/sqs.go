@@ -127,7 +127,7 @@ func (s *AWSSqsSource) Read(_ context.Context, readRequest sourcesdk.ReadRequest
 				[]byte(*msgs[i].Body),
 				// The ReceiptHandle is a unique identifier for the received message and is required to delete it from the queue
 				// partitionId 0 As sqs doesn't have partitions
-				sourcesdk.NewOffset([]byte(*msgs[i].ReceiptHandle), 0),
+				sourcesdk.NewOffsetWithDefaultPartitionId([]byte(*msgs[i].ReceiptHandle)),
 				messageTimeStamp,
 			)
 			s.toAckSet[*msgs[i].ReceiptHandle] = struct{}{}
