@@ -33,6 +33,8 @@ import (
 	"github.com/numaproj/numaflow-go/pkg/sourcer"
 	"github.com/ory/dockertest/v3"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/numaproj-contrib/aws-sqs-source-go/pkg/mocks"
 )
 
 const (
@@ -42,27 +44,6 @@ const (
 	secretKey = "secret"
 	queueName = "numaflow-tests-sqs-queue"
 )
-
-type TestReadRequest struct {
-	CountValue uint64
-	Timeout    time.Duration
-}
-
-func (r TestReadRequest) TimeOut() time.Duration {
-	return r.Timeout
-}
-
-func (r TestReadRequest) Count() uint64 {
-	return r.CountValue
-}
-
-type TestAckRequest struct {
-	OffsetsValue []sourcer.Offset
-}
-
-func (ar TestAckRequest) Offsets() []sourcer.Offset {
-	return ar.OffsetsValue
-}
 
 var resource *dockertest.Resource
 var pool *dockertest.Pool
@@ -210,7 +191,7 @@ func TestAWSSqsSource_Read2Integ(t *testing.T) {
 	doneCh := make(chan struct{})
 
 	go func() {
-		awsSqsSource.Read(context.TODO(), TestReadRequest{
+		awsSqsSource.Read(ctx, mocks.ReadRequest{
 			CountValue: 2,
 			Timeout:    time.Second,
 		}, messageCh)
@@ -224,7 +205,7 @@ func TestAWSSqsSource_Read2Integ(t *testing.T) {
 	// Since the previous batch didn't get acked, the data source shouldn't allow us to read more messages
 	// We should get 0 messages, meaning the channel only holds the previous 2 messages
 	go func() {
-		awsSqsSource.Read(context.TODO(), TestReadRequest{
+		awsSqsSource.Read(ctx, mocks.ReadRequest{
 			CountValue: 4,
 			Timeout:    time.Second,
 		}, messageCh)
@@ -236,7 +217,7 @@ func TestAWSSqsSource_Read2Integ(t *testing.T) {
 	// Ack the first batch
 	msg1 := <-messageCh
 	msg2 := <-messageCh
-	awsSqsSource.Ack(context.TODO(), TestAckRequest{
+	awsSqsSource.Ack(ctx, mocks.TestAckRequest{
 		OffsetsValue: []sourcer.Offset{msg1.Offset(), msg2.Offset()},
 	})
 	doneCh3 := make(chan struct{})
@@ -244,7 +225,7 @@ func TestAWSSqsSource_Read2Integ(t *testing.T) {
 	err = sendMessages(awsSqsSource.sqsServiceClient, awsSqsSource.queueURL, 6, ctx)
 	assert.Nil(t, err)
 	go func() {
-		awsSqsSource.Read(context.TODO(), TestReadRequest{
+		awsSqsSource.Read(ctx, mocks.ReadRequest{
 			CountValue: 6,
 			Timeout:    time.Second,
 		}, messageCh)
@@ -276,7 +257,7 @@ func TestAWSSqsSource_Pending(t *testing.T) {
 	doneCh := make(chan struct{})
 
 	go func() {
-		awsSqsSource.Read(context.TODO(), TestReadRequest{
+		awsSqsSource.Read(ctx, mocks.ReadRequest{
 			CountValue: 2,
 			Timeout:    time.Second,
 		}, messageCh)
@@ -287,7 +268,7 @@ func TestAWSSqsSource_Pending(t *testing.T) {
 	msg1 := <-messageCh
 	msg2 := <-messageCh
 
-	awsSqsSource.Ack(context.TODO(), TestAckRequest{
+	awsSqsSource.Ack(ctx, mocks.TestAckRequest{
 		OffsetsValue: []sourcer.Offset{msg1.Offset(), msg2.Offset()},
 	})
 	// Post Acknowledging Pending Items should be 0

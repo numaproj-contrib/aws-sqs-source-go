@@ -18,14 +18,15 @@ limitations under the License.
 
 import (
 	"context"
-	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/service/sqs"
-	"github.com/aws/aws-sdk-go-v2/service/sqs/types"
-	sourcesdk "github.com/numaproj/numaflow-go/pkg/sourcer"
 	"log"
 	"strconv"
 	"sync"
 	"time"
+
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/sqs"
+	"github.com/aws/aws-sdk-go-v2/service/sqs/types"
+	sourcesdk "github.com/numaproj/numaflow-go/pkg/sourcer"
 )
 
 const (
@@ -109,16 +110,29 @@ func (s *AWSSqsSource) Read(_ context.Context, readRequest sourcesdk.ReadRequest
 	}
 	msgs := msgResult.Messages
 	for i := 0; i < len(msgs); i++ {
-		s.lock.Lock()
-		messageCh <- sourcesdk.NewMessage(
-			[]byte(*msgs[i].Body),
-			// The ReceiptHandle is a unique identifier for the received message and is required to delete it from the queue
-			// partitionId 0 As sqs doesn't have partitions
-			sourcesdk.NewOffset([]byte(*msgs[i].ReceiptHandle), "0"),
-			time.Now(),
-		)
-		s.toAckSet[*msgs[i].ReceiptHandle] = struct{}{}
-		s.lock.Unlock()
+		select {
+		case <-ctx.Done():
+			return
+		default:
+			s.lock.Lock()
+			var messageTimeStamp time.Time
+			atoi, err := strconv.ParseInt(msgs[i].Attributes["SentTimestamp"], 10, 64)
+			if err != nil {
+				log.Printf("error parsing sent timestamp %s", err)
+				messageTimeStamp = time.Now()
+			} else {
+				messageTimeStamp = time.Unix(0, atoi*int64(time.Millisecond))
+			}
+			messageCh <- sourcesdk.NewMessage(
+				[]byte(*msgs[i].Body),
+				// The ReceiptHandle is a unique identifier for the received message and is required to delete it from the queue
+				// partitionId 0 As sqs doesn't have partitions
+				sourcesdk.NewOffset([]byte(*msgs[i].ReceiptHandle), 0),
+				messageTimeStamp,
+			)
+			s.toAckSet[*msgs[i].ReceiptHandle] = struct{}{}
+			s.lock.Unlock()
+		}
 	}
 }
 
@@ -134,4 +148,8 @@ func (s *AWSSqsSource) Ack(ctx context.Context, request sourcesdk.AckRequest) {
 		}
 		delete(s.toAckSet, string(offset.Value()))
 	}
+}
+
+func (s *AWSSqsSource) Partitions(_ context.Context) []int32 {
+	return sourcesdk.DefaultPartitions()
 }
