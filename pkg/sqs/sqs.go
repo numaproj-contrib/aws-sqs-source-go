@@ -118,7 +118,6 @@ func (s *AWSSqsSource) Read(_ context.Context, readRequest sourcesdk.ReadRequest
 			var messageTimeStamp time.Time
 			atoi, err := strconv.ParseInt(msgs[i].Attributes["SentTimestamp"], 10, 64)
 			if err != nil {
-				log.Printf("error parsing sent timestamp %s", err)
 				messageTimeStamp = time.Now()
 			} else {
 				messageTimeStamp = time.Unix(0, atoi*int64(time.Millisecond))
