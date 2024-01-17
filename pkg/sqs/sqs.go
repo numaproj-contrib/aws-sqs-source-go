@@ -116,12 +116,8 @@ func (s *AWSSqsSource) Read(_ context.Context, readRequest sourcesdk.ReadRequest
 		default:
 			s.lock.Lock()
 			var messageTimeStamp time.Time
-			atoi, err := strconv.ParseInt(msgs[i].Attributes["SentTimestamp"], 10, 64)
-			if err != nil {
-				messageTimeStamp = time.Now()
-			} else {
-				messageTimeStamp = time.Unix(0, atoi*int64(time.Millisecond))
-			}
+			atoi, _ := strconv.ParseInt(msgs[i].Attributes["SentTimestamp"], 10, 64)
+			messageTimeStamp = time.Unix(0, atoi*int64(time.Millisecond))
 			messageCh <- sourcesdk.NewMessage(
 				[]byte(*msgs[i].Body),
 				// The ReceiptHandle is a unique identifier for the received message and is required to delete it from the queue
