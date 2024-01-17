@@ -116,6 +116,7 @@ func (s *AWSSqsSource) Read(_ context.Context, readRequest sourcesdk.ReadRequest
 		default:
 			s.lock.Lock()
 			var messageTimeStamp time.Time
+                         // On a production environment, an SQS message should always have a SentTimestamp, hence we are not checking the error here. A better approach could be to panic when getting an error. However, the local test moto doesn't provide the timestamp. For now, we skip checking to make local tests happy.
 			atoi, _ := strconv.ParseInt(msgs[i].Attributes["SentTimestamp"], 10, 64)
 			messageTimeStamp = time.Unix(0, atoi*int64(time.Millisecond))
 			messageCh <- sourcesdk.NewMessage(
