@@ -7,7 +7,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/config v1.19.1
 	github.com/aws/aws-sdk-go-v2/service/sqs v1.24.7
 	github.com/numaproj-contrib/numaflow-utils-go v0.0.8
-	github.com/numaproj/numaflow-go v0.5.2
+	github.com/numaproj/numaflow-go v0.6.0
 	github.com/ory/dockertest/v3 v3.10.0
 	github.com/redis/go-redis/v9 v9.2.1
 	github.com/stretchr/testify v1.8.4

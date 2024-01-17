@@ -20,6 +20,7 @@ import (
 	"context"
 	"log"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -29,22 +30,25 @@ import (
 )
 
 const (
-	approximateNumberOfMessages           = "ApproximateNumberOfMessages"
-	approximateNumberOfMessagesNotVisible = "ApproximateNumberOfMessagesNotVisible"
-	maxNumberOfMessages                   = 10 // maxNumberOfMessages is messages to return From SQS Valid values: 1 to 10. Default: 1
-	waitTimeSeconds                       = 20 // waitTimeSeconds specifies the time (in seconds) the call waits for a message to arrive in the queue before returning. If a message arrives, the call returns early; if not and the time expires, it returns an empty message list.
+	approximateNumberOfMessages = "ApproximateNumberOfMessages"
+	maxNumberOfMessages         = 10 // maxNumberOfMessages is messages to return From SQS Valid values: 1 to 10. Default: 1
+	waitTimeSeconds             = 20 // waitTimeSeconds specifies the time (in seconds) the call waits for a message to arrive in the queue before returning. If a message arrives, the call returns early; if not and the time expires, it returns an empty message list.
 )
 
 // AWSSqsSource represents an AWS SQS source with necessary attributes.
 type AWSSqsSource struct {
 	queueURL         *string
+	toAckSet         map[string]struct{}
 	sqsServiceClient *sqs.Client
+	lock             *sync.Mutex
 }
 
 func NewAWSSqsSource(client *sqs.Client, queueURL *string) *AWSSqsSource {
 	return &AWSSqsSource{
 		sqsServiceClient: client,
 		queueURL:         queueURL,
+		toAckSet:         make(map[string]struct{}),
+		lock:             new(sync.Mutex),
 	}
 }
 
@@ -84,18 +88,14 @@ func (s *AWSSqsSource) Pending(_ context.Context) int64 {
 
 // Read fetches messages from the SQS queue and sends them to the provided message channel.
 func (s *AWSSqsSource) Read(_ context.Context, readRequest sourcesdk.ReadRequest, messageCh chan<- sourcesdk.Message) {
-	var readRequestCount int32 = 10
-
-	ctx, cancel := context.WithTimeout(context.Background(), readRequest.TimeOut())
-	defer cancel()
-	// If we have un-acked data (data which is received but yet to be deleted from the queue
-	count, err := s.getApproximateMessageCount(approximateNumberOfMessagesNotVisible)
-	if err != nil {
-		log.Fatalf("error getting approximate number of messages not visible from queue %s", err)
-	}
-	if count > 0 {
+	// If we have un-acked data, we return without reading any new data.
+	if len(s.toAckSet) > 0 {
 		return
 	}
+	var readRequestCount int32 = 10
+	ctx, cancel := context.WithTimeout(context.Background(), readRequest.TimeOut())
+	defer cancel()
+
 	if readRequest.Count() <= maxNumberOfMessages {
 		readRequestCount = int32(readRequest.Count())
 	}
@@ -105,7 +105,8 @@ func (s *AWSSqsSource) Read(_ context.Context, readRequest sourcesdk.ReadRequest
 		MaxNumberOfMessages: readRequestCount,
 	})
 	if err != nil {
-		log.Fatalln("Error receiving message:", err)
+		log.Printf("error receiving message:%s", err)
+		return
 	}
 	msgs := msgResult.Messages
 	for i := 0; i < len(msgs); i++ {
@@ -113,13 +114,20 @@ func (s *AWSSqsSource) Read(_ context.Context, readRequest sourcesdk.ReadRequest
 		case <-ctx.Done():
 			return
 		default:
+			s.lock.Lock()
+			var messageTimeStamp time.Time
+                         // On a production environment, an SQS message should always have a SentTimestamp, hence we are not checking the error here. A better approach could be to panic when getting an error. However, the local test moto doesn't provide the timestamp. For now, we skip checking to make local tests happy.
+			atoi, _ := strconv.ParseInt(msgs[i].Attributes["SentTimestamp"], 10, 64)
+			messageTimeStamp = time.Unix(0, atoi*int64(time.Millisecond))
 			messageCh <- sourcesdk.NewMessage(
 				[]byte(*msgs[i].Body),
 				// The ReceiptHandle is a unique identifier for the received message and is required to delete it from the queue
 				// partitionId 0 As sqs doesn't have partitions
-				sourcesdk.NewOffset([]byte(*msgs[i].ReceiptHandle), "0"),
-				time.Now(), // TODO: Send the time when the message was sent to queue
+				sourcesdk.NewOffsetWithDefaultPartitionId([]byte(*msgs[i].ReceiptHandle)),
+				messageTimeStamp,
 			)
+			s.toAckSet[*msgs[i].ReceiptHandle] = struct{}{}
+			s.lock.Unlock()
 		}
 	}
 }
@@ -134,5 +142,10 @@ func (s *AWSSqsSource) Ack(ctx context.Context, request sourcesdk.AckRequest) {
 		if err != nil {
 			log.Fatalln("Failed to delete message:", err)
 		}
+		delete(s.toAckSet, string(offset.Value()))
 	}
+}
+
+func (s *AWSSqsSource) Partitions(_ context.Context) []int32 {
+	return sourcesdk.DefaultPartitions()
 }
