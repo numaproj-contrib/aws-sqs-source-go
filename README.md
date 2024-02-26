@@ -34,7 +34,7 @@ spec:
   vertices:
     - name: sqs-source
       source:
-        udflex:
+        udsource:
           container:
             image: your-repo/aws-sqs-source-go:v1.0.0
             env:
@@ -128,7 +128,7 @@ Congratulations! You have successfully set up an AWS SQS source in a Numaflow pi
         vertices:
           - name: sqs-source
             source:
-              udflex:
+              udsource:
                 container:
                   image: your-repo/aws-sqs-source-go:v1.0.0
                   env:
@@ -191,7 +191,7 @@ spec:
   vertices:
     - name: sqs-source
       source:
-        udflex:
+        udsource:
           container:
             image: your-repo/aws-sqs-source-go:v1.0.0
             env:
