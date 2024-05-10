@@ -401,8 +401,8 @@ github.com/numaproj-contrib/numaflow-utils-go v0.0.8 h1:y0Se9dHepP6OM2bH12RDLZbJ
 github.com/numaproj-contrib/numaflow-utils-go v0.0.8/go.mod h1:ntZMfS4mEQ5oKV4sTm5/ebBMgHlD+Zrl8HJSlbTXEho=
 github.com/numaproj/numaflow v0.11.0 h1:gcWMI73nb8lnpAV5wYejIjDxUH3W7C3fQTD9ZewLfY8=
 github.com/numaproj/numaflow v0.11.0/go.mod h1:wVhsWBN8a04UKSyULNpPzLuzkG2TcEhS5IteWrUhRHE=
-github.com/numaproj/numaflow-go v0.6.0 h1:gqTX1u1pFJJhX/3l3zYM8aLqRSHEainYrgBIollL0js=
-github.com/numaproj/numaflow-go v0.6.0/go.mod h1:5zwvvREIbqaCPCKsNE1MVjVToD0kvkCh2Z90Izlhw5U=
+github.com/numaproj/numaflow-go v0.7.0 h1:k+XQrB4se6SpHblY8k1OraKCm33B7ZmNNUBl7P62amM=
+github.com/numaproj/numaflow-go v0.7.0/go.mod h1:WoMt31+h3up202zTRI8c/qe42B8UbvwLe2mJH0MAlhI=
 github.com/onsi/ginkgo v1.10.1 h1:q/mM8GF/n0shIN8SaAZ0V+jnLPzen6WIVZdiwrRlMlo=
 github.com/onsi/ginkgo v1.10.1/go.mod h1:lLunBs/Ym6LB5Z9jYTR76FiuTmxDTDusOGeTQH+WWjE=
 github.com/onsi/ginkgo/v2 v2.9.4 h1:xR7vG4IXt5RWx6FfIjyAtsoMAtnc3C/rFXBBd2AjZwE=
