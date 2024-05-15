@@ -31,7 +31,11 @@ spec:
       containers:
         - name: moto
           command: [ "/usr/local/bin/moto_server", "-H", "0.0.0.0"]
-          image: motoserver/moto:2.2.4
+          image: motoserver/moto:latest
+          imagePullPolicy: Always
+          env:
+            - name: MOTO_PORT
+              value: "5000"
           livenessProbe:
             failureThreshold: 5
             httpGet:
