@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     services:
       goaws:
-        image: motoserver/moto
+        image: motoserver/moto:latest
         ports:
           - 5000:5000
         options: --env MOTO_PORT=5000
