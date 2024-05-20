@@ -224,9 +224,54 @@ spec:
      kubectl apply -f sqs-source-pipeline.yaml
      ```
 
+
+## Configuring AWS Credentials
+
+### Using IAM Roles with STS in Kubernetes
+
+For enhanced security, configure your Kubernetes pods to assume an IAM role using AWS Security Token Service (STS). This avoids the need to store or manage static AWS credentials.
+
+1. **Set up an IAM role with the necessary SQS permissions and a trust relationship to your Kubernetes service account.**
+2. **Use the AWS IAM Roles for Service Accounts (IRSA) feature if you are on EKS to bind the IAM role to a service account used by your pods.**
+3. **The AWS SDK within your application will automatically use these credentials when accessing AWS SQS.**
+
+## Example
+
+````
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+name: sqs-source-sa
+annotations:
+eks.amazonaws.com/role-arn: "arn:aws:iam::YOUR_ACCOUNT_ID:role/YOUR_IAM_ROLE"
+---
+apiVersion: numaflow.numaproj.io/v1alpha1
+kind: Pipeline
+metadata:
+name: sqs-source-pipeline
+spec:
+vertices:
+- name: sqs-source
+source:
+udsource:
+container:
+image: your-repo/aws-sqs-source-go:v1.0.0
+serviceAccountName: sqs-source-sa
+
+
+````
+
+
+
+### Configuring SQS Queue with Server-Side Resource Policy
+
+This configuration allows specific AWS roles or accounts to access the SQS queue without embedding credentials in the application:
+
+1. **Create a resource-based policy in AWS SQS that grants the necessary permissions to the IAM role used by your Kubernetes application.**
+2. **Ensure that the policy includes actions such as `sqs:SendMessage` and `sqs:ReceiveMessage`.**
+
+## Debugging AWS SQS Source
 By configuring your pipeline in this manner, it allows the AWS SQS source to dynamically retrieve the configuration from the environment variables, making it easier to manage credentials and configuration changes.
-
-
 
 To enable debugging, set the `DEBUG` environment variable to `true` within the AWS SQS source container. This will output additional log messages for troubleshooting.
 See - [Debugging](https://numaflow.numaproj.io/development/debugging/)
