@@ -83,8 +83,8 @@ cleanup-e2e:
 test-e2e:
 	$(MAKE) cleanup-e2e
 	$(MAKE) e2eapi-image
-	kubectl -n numaflow-system delete po -lapp.kubernetes.io/component=controller-manager,app.kubernetes.io/part-of=numaflow || true
-	kubectl -n numaflow-system delete po e2e-api-pod  --ignore-not-found=true || true
+	kubectl -n numaflow-system delete po -lapp.kubernetes.io/component=controller-manager,app.kubernetes.io/part-of=numaflow
+	kubectl -n numaflow-system delete po e2e-api-pod  --ignore-not-found=true
 	cat test/manifests/e2e-api-pod.yaml |  sed 's@quay.io/numaio/numaflow-go/@$(IMAGE_NAMESPACE)/@' | sed 's/:latest/:$(VERSION)/' | kubectl -n numaflow-system apply -f -
 	go generate $(shell find ./test/sqs/test$* -name '*.go')
 	AWS_REGION="us-east-1" AWS_ACCESS_KEY_ID="testing" AWS_SECRET_ACCESS_KEY="testing" AWS_ENDPOINT_URL="http://localhost:5000" go test -v -timeout 15m -count 1 --tags test -p 1 ./test/sqs/sqs_e2e_test.go

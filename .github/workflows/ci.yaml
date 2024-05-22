@@ -17,7 +17,7 @@ jobs:
         image: motoserver/moto:latest
         ports:
           - 5000:5000
-        options: --env MOTO_PORT=5000
+        options: --env MOTO_PORT=5000 # moto server requires port to be passed as env variable
     timeout-minutes: 10
     env:
       GOPATH: /home/runner/go
